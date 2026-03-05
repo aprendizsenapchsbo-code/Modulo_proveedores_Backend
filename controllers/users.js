@@ -1,4 +1,5 @@
 import users from "../models/users.js";
+import { generarJWT } from "../middlewares/validar-jwt.js";
 import bcrypt from "bcrypt";
 
 const httpUser = {
@@ -72,6 +73,59 @@ const httpUser = {
                 msg: "Error al crear el usuario"
             });
         }       
+    },
+
+    login: async (req, res) => {
+        try {
+            const { email, password } = req.body
+
+            if (!email || !password) {
+                return res.status(400).json({
+                    success: false,
+                    msg: "Email y password son obligatorios"
+                });
+            }
+
+            const usuario = await users.findOne({email});
+
+            if (!usuario){
+                return res.status(400).json({
+                    success: false,
+                    msg: "Credenciales incorrectas"
+                });
+            }
+            
+            const validarPassword = bcrypt.compareSync(password, usuario.password)
+            
+            if (!validarPassword){
+                return res.status(400).json({
+                    success: false,
+                    msg: "Credenciales incorrectas"
+                });
+            }
+
+            const token = await generarJWT(usuario.id);
+
+            res.json({
+                success: true,
+                msg: "Login exitoso",
+                data: {
+                    token,
+                    usuario: {
+                        id: usuario.id,
+                        email: usuario.email,
+                        rol: usuario.rol
+                    }
+                }
+            });
+
+        } catch (error) {
+            console.error('Error al iniciar sesión:', error);
+            res.status(500).json({
+                success: false,
+                msg: "Error al iniciar sesión"
+            });
+        }
     },
 
     updateUser: async (req, res) => {
