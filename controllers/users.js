@@ -24,12 +24,12 @@ const httpUser = {
 
     createUser: async (req, res) => {
         try {
-            const {email, password, rol} = req.body;
+            const {nombre, email, password, rol} = req.body;
 
-            if (!email || !password || !rol) {
+            if (!nombre || !email || !password || !rol) {
                 return res.status(400).json({
                     success: false,
-                    msg: "email, password y rol son obligatorios"
+                    msg: "nombre, email, password y rol son obligatorios"
                 });
             }
 
@@ -45,6 +45,7 @@ const httpUser = {
             }
 
             const user = new users({
+                nombre,
                 email,
                 password,
                 rol
@@ -62,6 +63,7 @@ const httpUser = {
                 msg: "Usuario creado con éxito",
                 data: {
                     id: user._id,
+                    nombre: user.nombre,
                     email: user.email
                 }
             });
@@ -113,6 +115,7 @@ const httpUser = {
                     token,
                     usuario: {
                         id: usuario.id,
+                        nombre: usuario.nombre,
                         email: usuario.email,
                         rol: usuario.rol
                     }
@@ -131,7 +134,7 @@ const httpUser = {
     updateUser: async (req, res) => {
         try {
             const { id } = req.params;
-            const { email, password, rol } = req.body;
+            const {nombre, email, password, rol } = req.body;
 
             const user = await users.findById(id);
 
@@ -160,6 +163,7 @@ const httpUser = {
             }
 
             const datosActualizar = {};
+            if(nombre) datosActualizar.nombre = nombre;
             if(email) datosActualizar.email = email;
             if(rol) datosActualizar.rol = rol;
 

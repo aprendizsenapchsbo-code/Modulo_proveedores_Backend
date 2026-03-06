@@ -1,6 +1,11 @@
 import mongoose from "mongoose";
 
 const userEsquema = new mongoose.Schema({
+    nombre: {
+        type: String,
+        required: [true, 'El nombre es obligatorio'],
+        trim: true
+    },
     email: {
         type: String,
         required: [true, 'El email es obligatorio'],
