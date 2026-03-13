@@ -2,6 +2,7 @@ import "dotenv/config"
 import express from 'express';
 import mongoose from 'mongoose';
 import users from "./routes/users.js"
+import proveedores from "./routes/proveedores.js"
 import cors from "cors"
 
 const app = express();
@@ -13,6 +14,7 @@ app.use(cors({
 }))
 
 app.use("/api/usuario", users)
+app.use("/api/proveedor", proveedores)
 
 app.listen(process.env.PORT || 3000, () => {
     console.log(`Servidor escuchando en el puerto ${process.env.PORT}`);
