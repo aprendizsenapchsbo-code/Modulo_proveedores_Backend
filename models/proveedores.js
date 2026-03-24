@@ -1,5 +1,4 @@
 import mongoose from "mongoose";
-import { type } from "os";
 
 const proveedorEsquema = new mongoose.Schema({
     // Información general del proveedor
@@ -32,8 +31,10 @@ const proveedorEsquema = new mongoose.Schema({
     CorreoElectronico: {
         type: String,
         required: [true, 'El correo electrónico es obligatorio'],
+        unique: true,
         trim: true,
-        lowercase: true
+        lowercase: true,
+        match: [/^\S+@\S+\.\S+$/, 'El correo no es válido']
     },
     /*   NombreRepresentante: {
         type: String,
@@ -68,11 +69,13 @@ const proveedorEsquema = new mongoose.Schema({
         required: [true, 'El correo electrónico del responsable de facturación es obligatorio'],
         trim: true,
         lowercase: true
-    }, */
-    tokenRegistro: {
+    },
+    estadoProveedor: {
         type: String,
-        default: null
-    }
-});
+        enum: ['activo', 'inactivo'],
+        default: 'activo'
+    },
+    */
+}, { timestamps: true });
 
 export default mongoose.model("Proveedores", proveedorEsquema);
