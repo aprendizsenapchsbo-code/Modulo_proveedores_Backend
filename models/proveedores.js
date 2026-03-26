@@ -70,12 +70,12 @@ const proveedorEsquema = new mongoose.Schema({
         trim: true,
         lowercase: true
     },
+    */
     estadoProveedor: {
         type: String,
         enum: ['activo', 'inactivo'],
         default: 'activo'
     },
-    */
 }, { timestamps: true });
 
 export default mongoose.model("Proveedores", proveedorEsquema);

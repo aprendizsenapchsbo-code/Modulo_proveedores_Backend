@@ -1,7 +1,6 @@
 import proveedores from "../models/proveedores.js";
 import Invitacion from "../models/invitacion.js";
 import { enviarCorreoRegistro } from "../services/emailService.js";
-import invitacion from "../models/invitacion.js";
 
 const httpProveedor = {
     getProveedores: async (req, res) => {
@@ -90,6 +89,17 @@ const httpProveedor = {
                 })
             };
 
+            // Validar que el correo de la invitación no esté registrado
+            const correoExistente = await proveedores.findOne({ 
+                CorreoElectronico: invitacion.CorreoElectronico 
+            });
+            if (correoExistente) {
+                return res.status(400).json({
+                    success: false,
+                    msg: "El correo ya está registrado"
+                })
+            }
+
             // Crear el proveedor con el correo que ya esta verificado
             const nuevoProveedor = await proveedores.create({
                 NIT,
@@ -116,6 +126,64 @@ const httpProveedor = {
             });
         }
     },
+
+    actualizarProveedor: async (req, res) => {
+        try {
+            const { id } = req.params;
+            const { NIT, RazonSocial, CorreoElectronico, estadoProveedor } = req.body;
+
+            // Validar que el proveedor exista
+            const proveedorExistente = await proveedores.findById(id);
+
+            if(!proveedorExistente) {
+                return res.status(404).json({
+                    success: false,
+                    msg: "Proveedor no encontrado"
+                });
+            }
+
+            // Vañidar que el NIT no esté registrado por otro proveedor
+            const nitExistente = await proveedores.findOne({ NIT, _id: { $ne: id } });
+            if (nitExistente) {
+                return res.status(400).json({
+                    success: false,
+                    msg: "El NIT ya está registrado por otro proveedor"
+                });
+            }
+
+            // Validar que el correo no esté registrado por otro proveedor
+            const correoExistente = await proveedores.findOne({ CorreoElectronico: CorreoElectronico, _id: { $ne: id } });
+            if (correoExistente) {
+                return res.status(400).json({
+                    success: false,
+                    msg: "El correo ya está registrado por otro proveedor"
+                });
+            }
+
+            // Actualizamos el proveedor
+            const proveedorActualizado = await proveedores.findByIdAndUpdate(id, {
+                NIT, 
+                RazonSocial, 
+                CorreoElectronico, 
+                estadoProveedor
+            }, { new: true }
+            );
+
+            res.status(200).json({
+                success: true,
+                data: proveedorActualizado,
+                msg: "Proveedor actualizado exitosamente"
+            });
+
+        } catch (error) {
+            console.error('Error al actualizar el proveedor:', error);
+            res.status(500).json({
+                success: false,
+                msg: "Error al actualizar el proveedor"
+            });
+        }
+    },
+
     eliminarProveedor: async (req, res) => {
         try {
             const { id } = req.params;
