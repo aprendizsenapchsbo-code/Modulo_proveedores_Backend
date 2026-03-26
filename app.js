@@ -31,7 +31,7 @@ app.listen(process.env.PORT || 3000, () => {
     console.log(`Servidor escuchando en el puerto ${process.env.PORT}`);
     // console.log(process.env.MONGODB_URI)
     mongoose 
-    .connect(`${process.env.MONGODB_URI}`) 
+    .connect(`${process.env.MONGODB_URL}`) 
     .then(() => console.log(`Base de datos conectada`))
     .catch(err => console.error("Error conectando DB", err));
 }); 
