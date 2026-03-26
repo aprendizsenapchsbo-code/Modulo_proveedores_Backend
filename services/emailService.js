@@ -27,7 +27,7 @@ export const enviarCorreoRegistro = async (CorreoElectronico) => {
         from: process.env.EMAIL_USER,
         to: CorreoElectronico,
         subject: 'Registro de proveedor',
-        html: `<p>Por favor, utiliza el siguiente link para completar tu registro: ${process.env.FRONTEND_URL}/#/formulario-proveedor/${token}</p>`
+        html: `<p>Por favor, utiliza el siguiente link para completar tu registro: ${process.env.FRONTEND_URL_PRODUCCION}/#/formulario-proveedor/${token}</p>`
     } 
     
     // Enviar email

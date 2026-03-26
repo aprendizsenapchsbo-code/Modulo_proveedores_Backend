@@ -107,6 +107,7 @@ const httpUser = {
             }
 
             const token = await generarJWT(usuario.id);
+            console.log('Token generado: ', token);
 
             res.json({
                 success: true,
@@ -126,7 +127,8 @@ const httpUser = {
             console.error('Error al iniciar sesión:', error);
             res.status(500).json({
                 success: false,
-                msg: "Error al iniciar sesión"
+                msg: "Error al iniciar sesión",
+                error: error.message
             });
         }
     },
