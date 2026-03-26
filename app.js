@@ -12,26 +12,25 @@ app.use(express.json());
 app.use(cors({
     origin: "*"
 }))
- 
+
+// 👇 Conectar a MongoDB ANTES de las rutas, fuera del app.listen
+const connectDB = async () => {
+    if (mongoose.connection.readyState === 0) { // 0 = desconectado
+        await mongoose.connect(process.env.MONGODB_URL)
+            .then(() => console.log('✅ Base de datos conectada'))
+            .catch(err => console.error('❌ Error conectando DB:', err));
+    }
+};
+
+connectDB(); // 👈 se ejecuta al iniciar el módulo
+
 app.use("/api/usuario", users)
 app.use("/api/proveedor", proveedores)
 
-// const URI = 'mongodb+srv://AprendizDB:Aprendiz_2026@cluster0.roars80.mongodb.net/proveedores';
+if (process.env.NODE_ENV !== 'production') {
+    app.listen(process.env.PORT || 3000, () => {
+        console.log(`Servidor escuchando en el puerto ${process.env.PORT || 3000}`);
+    });
+}
 
-// console.log('Intentando conectar...');
-
-// mongoose.connect(URI)
-//   .then(() => console.log('✅ Conectado exitosamente'))
-//   .catch((err) => {
-//     console.log('❌ Error:', err.message);
-//     console.log('Código:', err.code);
-//   });
-
-app.listen(process.env.PORT || 3000, () => {
-    console.log(`Servidor escuchando en el puerto ${process.env.PORT}`);
-    // console.log(process.env.MONGODB_URI)
-    mongoose 
-    .connect(`${process.env.MONGODB_URL}`) 
-    .then(() => console.log(`Base de datos conectada`))
-    .catch(err => console.error("Error conectando DB", err));
-}); 
+export default app;

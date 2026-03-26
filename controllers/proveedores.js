@@ -17,7 +17,8 @@ const httpProveedor = {
             console.error('Error en obtener los proveedores:', error);
             res.status(500).json({
                 success: false,
-                msg: "Error al buscar los proveedores"
+                msg: "Error al buscar los proveedores",
+                error: error.message
             });
         }
     },

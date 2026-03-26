@@ -4,7 +4,7 @@ import httpUser from "../controllers/users.js";
 
 const routes = Router();
 
-routes.get("/", validarJWT, httpUser.getUsers)
+routes.get("/", /* validarJWT, */ httpUser.getUsers)
 routes.post("/", httpUser.createUser)
 routes.post("/login", httpUser.login)
 routes.put("/:id", httpUser.updateUser)
