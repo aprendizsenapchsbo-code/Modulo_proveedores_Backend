@@ -16,7 +16,7 @@ app.use(cors({
 // 👇 Conectar a MongoDB ANTES de las rutas, fuera del app.listen
 const connectDB = async () => {
     if (mongoose.connection.readyState === 0) { // 0 = desconectado
-        await mongoose.connect(process.env.MONGODB_URL)
+        await mongoose.connect(process.env.MONGODB_URI)
             .then(() => console.log('✅ Base de datos conectada'))
             .catch(err => console.error('❌ Error conectando DB:', err));
     }

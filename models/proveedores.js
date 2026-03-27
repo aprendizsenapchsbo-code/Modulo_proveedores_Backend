@@ -73,8 +73,8 @@ const proveedorEsquema = new mongoose.Schema({
     */
     estadoProveedor: {
         type: String,
-        enum: ['activo', 'inactivo'],
-        default: 'activo'
+        enum: ['Actualizado', 'Pendiente Actualización', 'Inactivo'],
+        default: 'Actualizado'
     },
 }, { timestamps: true });
 

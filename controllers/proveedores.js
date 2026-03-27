@@ -1,11 +1,17 @@
 import proveedores from "../models/proveedores.js";
 import Invitacion from "../models/invitacion.js";
 import { enviarCorreoRegistro } from "../services/emailService.js";
+import { enviarCorreoActualizacion } from "../services/emailServiceActualizacion.js";
 
 const httpProveedor = {
     getProveedores: async (req, res) => {
         try {
+            console.log('🔍 [GET /api/proveedor] - Iniciando petición');
+            
+            console.log('📋 Buscando proveedores en la BD...');
             const proveedor = await proveedores.find();
+            
+            console.log('✅ Proveedores encontrados:', proveedor.length);
 
             res.json({
                 success: true,
@@ -14,7 +20,7 @@ const httpProveedor = {
             });
 
         } catch (error) {
-            console.error('Error en obtener los proveedores:', error);
+            console.error('❌ Error en obtener los proveedores:', error);
             res.status(500).json({
                 success: false,
                 msg: "Error al buscar los proveedores",
@@ -128,6 +134,7 @@ const httpProveedor = {
         }
     },
 
+    // Actualizar datos del proveedor (Admin/Asistente)
     actualizarProveedor: async (req, res) => {
         try {
             const { id } = req.params;
@@ -135,7 +142,6 @@ const httpProveedor = {
 
             // Validar que el proveedor exista
             const proveedorExistente = await proveedores.findById(id);
-
             if(!proveedorExistente) {
                 return res.status(404).json({
                     success: false,
@@ -143,32 +149,39 @@ const httpProveedor = {
                 });
             }
 
-            // Vañidar que el NIT no esté registrado por otro proveedor
-            const nitExistente = await proveedores.findOne({ NIT, _id: { $ne: id } });
-            if (nitExistente) {
-                return res.status(400).json({
-                    success: false,
-                    msg: "El NIT ya está registrado por otro proveedor"
-                });
+            // Validar que el NIT no esté registrado por otro proveedor
+            if (NIT && NIT !== proveedorExistente.NIT) {
+                const nitExistente = await proveedores.findOne({ NIT, _id: { $ne: id } });
+                if (nitExistente) {
+                    return res.status(400).json({
+                        success: false,
+                        msg: "El NIT ya está registrado por otro proveedor"
+                    });
+                }
             }
 
             // Validar que el correo no esté registrado por otro proveedor
-            const correoExistente = await proveedores.findOne({ CorreoElectronico: CorreoElectronico, _id: { $ne: id } });
-            if (correoExistente) {
-                return res.status(400).json({
-                    success: false,
-                    msg: "El correo ya está registrado por otro proveedor"
+            if (CorreoElectronico && CorreoElectronico !== proveedorExistente.CorreoElectronico) {
+                const correoExistente = await proveedores.findOne({ 
+                    CorreoElectronico: CorreoElectronico, 
+                    _id: { $ne: id } 
                 });
+                if (correoExistente) {
+                    return res.status(400).json({
+                        success: false,
+                        msg: "El correo ya está registrado por otro proveedor"
+                    });
+                }
             }
 
-            // Actualizamos el proveedor
-            const proveedorActualizado = await proveedores.findByIdAndUpdate(id, {
-                NIT, 
-                RazonSocial, 
-                CorreoElectronico, 
-                estadoProveedor
-            }, { new: true }
-            );
+            // Preparar objeto de actualización
+            const datosActualizar = { NIT, RazonSocial, CorreoElectronico };
+            if (estadoProveedor) {
+                datosActualizar.estadoProveedor = estadoProveedor;
+            }
+
+            // Actualizar el proveedor
+            const proveedorActualizado = await proveedores.findByIdAndUpdate(id, datosActualizar, { new: true });
 
             res.status(200).json({
                 success: true,
@@ -181,6 +194,106 @@ const httpProveedor = {
             res.status(500).json({
                 success: false,
                 msg: "Error al actualizar el proveedor"
+            });
+        }
+    },
+
+    // Actualizar datos del proveedor (El proveedor se actualiza a sí mismo desde el formulario)
+    actualizarDatosProveedor: async (req, res) => {
+        try {
+            const { id } = req.params;
+            const { NIT, RazonSocial, CorreoElectronico } = req.body;
+
+            // Validar que el proveedor exista
+            const proveedorExistente = await proveedores.findById(id);
+            if(!proveedorExistente) {
+                return res.status(404).json({
+                    success: false,
+                    msg: "Proveedor no encontrado"
+                });
+            }
+
+            // Validar que el NIT no esté registrado por otro proveedor
+            if (NIT && NIT !== proveedorExistente.NIT) {
+                const nitExistente = await proveedores.findOne({ NIT, _id: { $ne: id } });
+                if (nitExistente) {
+                    return res.status(400).json({
+                        success: false,
+                        msg: "El NIT ya está registrado por otro proveedor"
+                    });
+                }
+            }
+
+            // Validar que el correo no esté registrado por otro proveedor
+            if (CorreoElectronico && CorreoElectronico !== proveedorExistente.CorreoElectronico) {
+                const correoExistente = await proveedores.findOne({ 
+                    CorreoElectronico: CorreoElectronico, 
+                    _id: { $ne: id } 
+                });
+                if (correoExistente) {
+                    return res.status(400).json({
+                        success: false,
+                        msg: "El correo ya está registrado por otro proveedor"
+                    });
+                }
+            }
+
+            // Actualizar el proveedor y cambiar estado a "Actualizado"
+            const proveedorActualizado = await proveedores.findByIdAndUpdate(id, {
+                NIT, 
+                RazonSocial, 
+                CorreoElectronico, 
+                estadoProveedor: "Actualizado"
+            }, { new: true });
+
+            res.status(200).json({
+                success: true,
+                data: proveedorActualizado,
+                msg: "Datos actualizados exitosamente"
+            });
+
+        } catch (error) {
+            console.error('Error al actualizar los datos del proveedor:', error);
+            res.status(500).json({
+                success: false,
+                msg: "Error al actualizar los datos"
+            });
+        }
+    },
+
+    // Función para solicitar actualización al proveedor por medio de correo
+    solicitarActualizacion: async (req, res) => {
+        try {
+            const { id } = req.params;
+
+            // Validar que el proveedor exista
+            const proveedor = await proveedores.findById(id);
+            if (!proveedor) {
+                return res.status(404).json({
+                    success: false,
+                    msg: "Proveedor no encontrado"
+                });
+            }
+
+            // Enviar correo de actualización con el link del formulario
+            await enviarCorreoActualizacion(proveedor.CorreoElectronico, id);
+
+            // Actualizar el estado del proveedor a "Pendiente Actualización"
+            const proveedorActualizado = await proveedores.findByIdAndUpdate(id, {
+                estadoProveedor: "Pendiente Actualización"
+            }, { new: true });
+
+            res.status(200).json({
+                success: true,
+                data: proveedorActualizado,
+                msg: "Correo de actualización enviado exitosamente"
+            });
+
+        } catch (error) {
+            console.error('Error al solicitar la actualización:', error);
+            res.status(500).json({
+                success: false,
+                msg: "Error al solicitar la actualización"
             });
         }
     },
