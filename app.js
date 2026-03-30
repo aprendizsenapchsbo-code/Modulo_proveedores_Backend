@@ -1,3 +1,4 @@
+// app.js
 import "dotenv/config"
 import express from 'express';
 import mongoose from 'mongoose';
@@ -6,31 +7,43 @@ import proveedores from "./routes/proveedores.js"
 import cors from "cors"
 
 const app = express();
-
 app.use(express.json());
+app.use(cors({ origin: "*" }));
 
-app.use(cors({
-    origin: "*"
-}))
+// Conexión cacheada para serverless
+let isConnected = false;
 
-// 👇 Conectar a MongoDB ANTES de las rutas, fuera del app.listen
 const connectDB = async () => {
-    if (mongoose.connection.readyState === 0) { // 0 = desconectado
-        await mongoose.connect(process.env.MONGODB_URI)
-            .then(() => console.log('✅ Base de datos conectada'))
-            .catch(err => console.error('❌ Error conectando DB:', err));
-    }
+  if (isConnected) return;
+
+  await mongoose.connect(process.env.MONGODB_URL, {
+    bufferCommands: false,
+    family: 4, // 👈 fix para Vercel
+    serverSelectionTimeoutMS: 10000,
+  });
+
+  isConnected = true;
+  console.log('✅ Base de datos conectada');
 };
 
-connectDB(); // 👈 se ejecuta al iniciar el módulo
+// Middleware que conecta ANTES de cada request
+app.use(async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (err) {
+    console.error('❌ Error conectando DB:', err);
+    res.status(500).json({ error: 'Error de conexión a la base de datos' });
+  }
+});
 
-app.use("/api/usuario", users)
-app.use("/api/proveedor", proveedores)
+app.use("/api/usuario", users);
+app.use("/api/proveedor", proveedores);
 
 if (process.env.NODE_ENV !== 'production') {
-    app.listen(process.env.PORT || 3000, () => {
-        console.log(`Servidor escuchando en el puerto ${process.env.PORT || 3000}`);
-    });
+  app.listen(process.env.PORT || 3000, () => {
+    console.log(`Servidor escuchando en el puerto ${process.env.PORT || 3000}`);
+  });
 }
 
 export default app;
