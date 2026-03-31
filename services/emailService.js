@@ -22,14 +22,32 @@ export const enviarCorreoRegistro = async (CorreoElectronico) => {
     const token = generarToken();
     console.log('Token: ', token);
 
-    
+
     const mailOptions = {
         from: process.env.EMAIL_USER,
         to: CorreoElectronico,
-        subject: 'Registro de proveedor',
-        html: `<p>Por favor, utiliza el siguiente link para completar tu registro: ${process.env.FRONTEND_URL_PRODUCCION}/#/formulario-proveedor/${token}</p>`
-    } 
-    
+        subject: 'Pre-registro de proveedor',
+        html: `<p>Estimado(a),</p>
+
+            <p>Ha sido invitado(a) a realizar su <strong>pre-registro como proveedor</strong>.</p>
+
+            <p>
+            Por favor complete el proceso ingresando al siguiente enlace:<br>
+            <a href="${process.env.FRONTEND_URL_PRODUCCION}/#/formulario-proveedor/${token}">
+            ${process.env.FRONTEND_URL_PRODUCCION}/#/formulario-proveedor/${token}
+            </a>
+            </p>
+
+            <p>Una vez finalizado, su información será evaluada para continuar con el proceso de vinculación.</p>
+
+            <p>Si presenta inconvenientes, puede responder a este correo.</p>
+
+            <p>
+            Cordialmente,<br>
+            PCH San Bartolomé
+            </p>`
+    }
+
     // Enviar email
     try {
         const info = await transporter.sendMail(mailOptions);
@@ -40,7 +58,7 @@ export const enviarCorreoRegistro = async (CorreoElectronico) => {
             CorreoElectronico,
             tokenRegistro: token,
         });
-        
+
         return {
             success: true,
             message: info.messageId,

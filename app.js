@@ -16,7 +16,7 @@ let isConnected = false;
 const connectDB = async () => {
   if (isConnected) return;
 
-  await mongoose.connect(process.env.MONGODB_URL, {
+  await mongoose.connect(process.env.MONGODB_URI, {
     bufferCommands: false,
     family: 4, // 👈 fix para Vercel
     serverSelectionTimeoutMS: 10000,

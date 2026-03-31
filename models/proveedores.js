@@ -13,21 +13,21 @@ const proveedorEsquema = new mongoose.Schema({
         required: [true, 'La razón social es obligatoria'],
         trim: true
     },
-//    DireccionNotificacion: {
-//         type: String,
-//         required: [true, 'La dirección de notificación es obligatoria'],
-//         trim: true
-//     },
-//     Telefono: {
-//         type: String,
-//         required: [true, 'El teléfono es obligatorio'],
-//         trim: true
-//     },
-//     Ciudad: {
-//         type: String,
-//         required: [true, 'La ciudad es obligatoria'],
-//         trim: true
-//     },
+   DireccionNotificacion: {
+        type: String,
+        required: [true, 'La dirección de notificación es obligatoria'],
+        trim: true
+    },
+    Telefono: {
+        type: String,
+        required: [true, 'El teléfono es obligatorio'],
+        trim: true
+    },
+    Ciudad: {
+        type: String,
+        required: [true, 'La ciudad es obligatoria'],
+        trim: true
+    },
     CorreoElectronico: {
         type: String,
         required: [true, 'El correo electrónico es obligatorio'],
@@ -36,7 +36,7 @@ const proveedorEsquema = new mongoose.Schema({
         lowercase: true,
         match: [/^\S+@\S+\.\S+$/, 'El correo no es válido']
     },
-    /*   NombreRepresentante: {
+      NombreRepresentante: {
         type: String,
         required: [true, 'El nombre del representante legal es obligatorio'],
         trim: true
@@ -70,7 +70,6 @@ const proveedorEsquema = new mongoose.Schema({
         trim: true,
         lowercase: true
     },
-    */
     estadoProveedor: {
         type: String,
         enum: ['Actualizado', 'Pendiente Actualización', 'Inactivo'],

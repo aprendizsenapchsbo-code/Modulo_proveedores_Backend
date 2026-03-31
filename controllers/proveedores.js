@@ -72,7 +72,19 @@ const httpProveedor = {
     completarRegistro: async (req, res) => {
         try {
             const { token } = req.params;
-            const { NIT, RazonSocial } = req.body;
+            const {
+                NIT,
+                RazonSocial,
+                DireccionNotificacion,
+                Telefono,
+                Ciudad,
+                NombreRepresentante,
+                NumeroIdentificacion,
+                TelefonoRepresentante,
+                CorreoElectronicoRepresentante,
+                NombresApellidosResponsable,
+                CorreoElectronicoResponsable
+            } = req.body;
 
             // Buscar la invitación por el token
             const invitacion = await Invitacion.findOne({
@@ -107,11 +119,20 @@ const httpProveedor = {
                 })
             }
 
-            // Crear el proveedor con el correo que ya esta verificado
+            // Crear el proveedor con el correo que ya está verificado
             const nuevoProveedor = await proveedores.create({
                 NIT,
                 RazonSocial,
-                CorreoElectronico: invitacion.CorreoElectronico
+                DireccionNotificacion,
+                Telefono,
+                Ciudad,
+                CorreoElectronico: invitacion.CorreoElectronico,
+                NombreRepresentante,
+                NumeroIdentificacion,
+                TelefonoRepresentante,
+                CorreoElectronicoRepresentante,
+                NombresApellidosResponsable,
+                CorreoElectronicoResponsable
             });
 
             // Invalidar el link marcando la invitación como completada
@@ -138,7 +159,21 @@ const httpProveedor = {
     actualizarProveedor: async (req, res) => {
         try {
             const { id } = req.params;
-            const { NIT, RazonSocial, CorreoElectronico, estadoProveedor } = req.body;
+            const {
+                NIT,
+                RazonSocial,
+                DireccionNotificacion,
+                Telefono,
+                Ciudad,
+                CorreoElectronico,
+                NombreRepresentante,
+                NumeroIdentificacion,
+                TelefonoRepresentante,
+                CorreoElectronicoRepresentante,
+                NombresApellidosResponsable,
+                CorreoElectronicoResponsable,
+                estadoProveedor
+            } = req.body;
 
             // Validar que el proveedor exista
             const proveedorExistente = await proveedores.findById(id);
@@ -175,7 +210,21 @@ const httpProveedor = {
             }
 
             // Preparar objeto de actualización
-            const datosActualizar = { NIT, RazonSocial, CorreoElectronico };
+            const datosActualizar = {
+                NIT,
+                RazonSocial,
+                DireccionNotificacion,
+                Telefono,
+                Ciudad,
+                CorreoElectronico,
+                NombreRepresentante,
+                NumeroIdentificacion,
+                TelefonoRepresentante,
+                CorreoElectronicoRepresentante,
+                NombresApellidosResponsable,
+                CorreoElectronicoResponsable
+            };
+            Object.keys(datosActualizar).forEach(key => datosActualizar[key] === undefined && delete datosActualizar[key]);
             if (estadoProveedor) {
                 datosActualizar.estadoProveedor = estadoProveedor;
             }
@@ -202,7 +251,20 @@ const httpProveedor = {
     actualizarDatosProveedor: async (req, res) => {
         try {
             const { id } = req.params;
-            const { NIT, RazonSocial, CorreoElectronico } = req.body;
+            const {
+                NIT,
+                RazonSocial,
+                DireccionNotificacion,
+                Telefono,
+                Ciudad,
+                CorreoElectronico,
+                NombreRepresentante,
+                NumeroIdentificacion,
+                TelefonoRepresentante,
+                CorreoElectronicoRepresentante,
+                NombresApellidosResponsable,
+                CorreoElectronicoResponsable
+            } = req.body;
 
             // Validar que el proveedor exista
             const proveedorExistente = await proveedores.findById(id);
@@ -239,12 +301,24 @@ const httpProveedor = {
             }
 
             // Actualizar el proveedor y cambiar estado a "Actualizado"
-            const proveedorActualizado = await proveedores.findByIdAndUpdate(id, {
-                NIT, 
-                RazonSocial, 
-                CorreoElectronico, 
+            const datosActualizar = {
+                NIT,
+                RazonSocial,
+                DireccionNotificacion,
+                Telefono,
+                Ciudad,
+                CorreoElectronico,
+                NombreRepresentante,
+                NumeroIdentificacion,
+                TelefonoRepresentante,
+                CorreoElectronicoRepresentante,
+                NombresApellidosResponsable,
+                CorreoElectronicoResponsable,
                 estadoProveedor: "Actualizado"
-            }, { new: true });
+            };
+            Object.keys(datosActualizar).forEach(key => datosActualizar[key] === undefined && delete datosActualizar[key]);
+
+            const proveedorActualizado = await proveedores.findByIdAndUpdate(id, datosActualizar, { new: true });
 
             res.status(200).json({
                 success: true,
