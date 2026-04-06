@@ -36,7 +36,7 @@ const proveedorEsquema = new mongoose.Schema({
         lowercase: true,
         match: [/^\S+@\S+\.\S+$/, 'El correo no es válido']
     },
-      NombreRepresentante: {
+    NombreRepresentante: {
         type: String,
         required: [true, 'El nombre del representante legal es obligatorio'],
         trim: true
@@ -70,10 +70,51 @@ const proveedorEsquema = new mongoose.Schema({
         trim: true,
         lowercase: true
     },
+    TipoContribuyente: {
+        type: String,
+        enum: ['Persona Natural', 'Persona Jurídica'],
+        required: [true, 'El tipo de contribuyente es obligatorio'],
+        default: 'Persona Jurídica'
+    },
+    AutorizaDatosPersonales: {
+        type: Boolean,
+        required: [true, 'La autorización de datos personales es obligatoria']
+    },
+    AutorizaConflictos: {
+        type: Boolean,
+        required: [true, 'La autorización de conflictos e intereses es obligatoria']
+    },
+    Documentos: {
+        type: [
+            {
+                tipo: {
+                    type: String,
+                    required: [true, 'El tipo de documento es obligatorio'],
+                    trim: true
+                },
+                nombre: {
+                    type: String,
+                    required: [true, 'El nombre del documento es obligatorio'],
+                    trim: true
+                },
+                url: {
+                    type: String,
+                    required: [true, 'La URL o ruta del documento es obligatoria'],
+                    trim: true
+                }
+            }
+        ],
+        validate: {
+            validator: function(value) {
+                return Array.isArray(value) && value.length > 0;
+            },
+            message: 'Debe ingresar al menos un documento'
+        }
+    },
     estadoProveedor: {
         type: String,
-        enum: ['Actualizado', 'Pendiente Actualización', 'Inactivo'],
-        default: 'Actualizado'
+        enum: ['Pre-registro', 'Registrado', 'Actualizado', 'Pendiente Actualización', 'Inactivo'],
+        default: 'Pre-registro'
     },
 }, { timestamps: true });
 

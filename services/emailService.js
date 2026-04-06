@@ -33,8 +33,8 @@ export const enviarCorreoRegistro = async (CorreoElectronico) => {
 
             <p>
             Por favor complete el proceso ingresando al siguiente enlace:<br>
-            <a href="${process.env.FRONTEND_URL_PRODUCCION}/#/formulario-proveedor/${token}">
-            ${process.env.FRONTEND_URL_PRODUCCION}/#/formulario-proveedor/${token}
+            <a href="${process.env.FRONTEND_URL}/#/formulario-proveedor/${token}">
+            ${process.env.FRONTEND_URL}/#/formulario-proveedor/${token}
             </a>
             </p>
 
@@ -66,6 +66,76 @@ export const enviarCorreoRegistro = async (CorreoElectronico) => {
         };
     } catch (error) {
         console.error('Error al enviar el correo: ', error);
+        throw error;
+    }
+}
+
+export const enviarCorreoRevisionEmpresa = async (proveedor) => {
+    const destinatario = process.env.EMAIL_NOTIFICACION_EMPRESA || process.env.EMAIL_USER;
+    const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: destinatario,
+        subject: 'Revisión de nuevo proveedor registrado',
+        html: `<p>Se ha completado el registro de un nuevo proveedor.</p>
+            <p><strong>Proveedor:</strong> ${proveedor.RazonSocial}</p>
+            <p><strong>NIT:</strong> ${proveedor.NIT}</p>
+            <p><strong>Correo proveedor:</strong> ${proveedor.CorreoElectronico}</p>
+            <p><strong>Representante legal:</strong> ${proveedor.NombreRepresentante}</p>
+            <p><strong>Responsable de facturación:</strong> ${proveedor.NombresApellidosResponsable}</p>
+            <p>Por favor revise el registro y proceda con la validación.</p>
+            <p>Link de administración: ${process.env.FRONTEND_URL_PRODUCCION || 'https://modulo-proveedores.vercel.app'}</p>`
+    };
+
+    try {
+        const info = await transporter.sendMail(mailOptions);
+        console.log('Correo de revisión enviado: ', info.messageId);
+        return {
+            success: true,
+            message: info.messageId
+        };
+    } catch (error) {
+        console.error('Error al enviar el correo de revisión:', error);
+        throw error;
+    }
+}
+
+export const enviarCorreoAprobacion = async (proveedor) => {
+    const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: proveedor.CorreoElectronico,
+        subject: 'Registro aprobado como proveedor',
+        html: `
+            <p>Estimado(a) <strong>${proveedor.NombreRepresentante}</strong>,</p>
+
+            <p>Nos complace informarle que su registro como proveedor de <strong>PCH San Bartolomé</strong> ha sido <strong>aprobado exitosamente</strong>.</p>
+
+            <p><strong>Datos de su registro:</strong></p>
+            <ul>
+                <li><strong>Razón Social:</strong> ${proveedor.RazonSocial}</li>
+                <li><strong>NIT:</strong> ${proveedor.NIT}</li>
+                <li><strong>Estado:</strong> Registrado</li>
+            </ul>
+
+            <p>A partir de ahora hace parte de nuestra base de proveedores activos.</p>
+
+            <p>Si tiene alguna pregunta puede responder a este correo.</p>
+
+            <p>
+            Cordialmente,<br>
+            PCH San Bartolomé
+            </p>
+        `
+    };
+
+    try {
+        const info = await transporter.sendMail(mailOptions);
+        console.log('Correo de aprobación enviado: ', info.messageId);
+        return {
+            success: true,
+            message: info.messageId
+        };
+    } catch (error) {
+        console.error('Error al enviar el correo de aprobación:', error);
         throw error;
     }
 }

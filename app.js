@@ -21,7 +21,7 @@ const connectDB = async () => {
     family: 4, // 👈 fix para Vercel
     serverSelectionTimeoutMS: 10000,
   });
-
+ 
   isConnected = true;
   console.log('✅ Base de datos conectada');
 };
