@@ -140,6 +140,22 @@ const httpProveedor = {
                 })
             }
 
+            const autorizaDatos = AutorizaDatosPersonales === true || AutorizaDatosPersonales === 'true';
+            if (!autorizaDatos) {
+                return res.status(400).json({
+                    success: false,
+                    msg: "Debe autorizar el tratamiento de datos personales para completar el registro"
+                })
+            }
+
+            const autorizaConflictos = AutorizaConflictos === true || AutorizaConflictos === 'true';
+            if (!autorizaConflictos) {
+                return res.status(400).json({
+                    success: false,
+                    msg: "Debe autorizar el tratamiento de conflictos e intereses para completar el registro"
+                })
+            }
+
             // Crear el proveedor con el correo que ya está verificado
             // y mantener el estado como Pre-registro hasta que la empresa lo verifique
             const nuevoProveedor = await proveedores.create({
