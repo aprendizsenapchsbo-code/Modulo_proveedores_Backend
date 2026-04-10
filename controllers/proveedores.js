@@ -221,66 +221,60 @@ const httpProveedor = {
 
     // Función para subir documentos a Cloudinary
     subirDocumento: async (req, res) => {
-        try {
-            // Si multer + cloudinary funcionaron, el archivo ya está subido
-            // y req.file contiene la información
-            if (!req.file) {
-                return res.status(400).json({
-                    success: false,
-                    msg: "No se recibio ningún archivo"
-                });
-            }
-
-            // Subir el buffer a Cloudinary manualmente
-            const resultado = await new Promise((resolve, reject) => {
-                cloudinary.uploader.upload_stream(
-                    {
-                        folder: 'proveedores/documentos',
-                        resource_type: 'raw',
-                        type: 'upload',
-                        access_mode: 'public'
-                    },
-                    (error, result) => {
-                        if (error) reject(error);
-                        else resolve(result);
-                    }
-                ).end(req.file.buffer); // 👈 envía el archivo desde memoria
-                // 👇 Extrae la extensión del nombre original
-            });
-            const extension = path.extname(req.file.originalname)
-                .toLowerCase()
-                .replace('.', ''); // "pdf", "docx", "jpg", etc.
-            
-            console.log('Cloudinary result:', {
-                url: resultado.secure_url,
-                resource_type: resultado.resource_type,
-                type: resultado.type,           // debe decir 'upload'
-                access_mode: resultado.access_mode, // debe decir 'public'
-            });
-            
-
-            // Extraer lo que se necesita guardar en la base de datos
-            const documento = {
-                tipo: req.body.tipo,
-                nombre: req.file.originalname,
-                url: resultado.secure_url,
-                formato: extension
-            };
-
-            res.status(200).json({
-                success: true,
-                data: documento,
-                msg: "Archivo subido exitosamente"
-            });
-
-        } catch (error) {
-            console.error('Error al subir el archivo', error),
-            res.status(500).json({
+    try {
+        if (!req.file) {
+            return res.status(400).json({
                 success: false,
-                msg: "Error al subir el archivo"
-            })
+                msg: "No se recibió ningún archivo"
+            });
         }
-    },
+
+        // Extrae la extensión del archivo original
+        const extension = path.extname(req.file.originalname)
+            .toLowerCase()
+            .replace('.', ''); // "pdf", "docx", "jpg", etc.
+
+        // Nombre limpio sin extensión para Cloudinary
+        const nombreSinExtension = path.basename(req.file.originalname, path.extname(req.file.originalname));
+
+        const resultado = await new Promise((resolve, reject) => {
+            cloudinary.uploader.upload_stream(
+                {
+                    folder: 'proveedores/documentos',
+                    resource_type: 'raw',
+                    type: 'upload',
+                    access_mode: 'public',
+                    format: extension,                          // 👈 fuerza el formato
+                    public_id: `${Date.now()}_${nombreSinExtension}`, // 👈 preserva el nombre
+                },
+                (error, result) => {
+                    if (error) reject(error);
+                    else resolve(result);
+                }
+            ).end(req.file.buffer);
+        });
+
+        const documento = {
+            tipo: req.body.tipo,
+            nombre: req.file.originalname,  // nombre original completo
+            url: resultado.secure_url,
+            formato: extension              // 👈 guarda la extensión
+        };
+
+        res.status(200).json({
+            success: true,
+            data: documento,
+            msg: "Archivo subido exitosamente"
+        });
+
+    } catch (error) {
+        console.error('Error al subir el archivo', error);
+        res.status(500).json({
+            success: false,
+            msg: "Error al subir el archivo"
+        });
+    }
+},
 
     // Actualizar datos del proveedor (Admin/Asistente)
     actualizarProveedor: async (req, res) => {
