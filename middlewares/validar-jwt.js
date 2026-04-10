@@ -29,7 +29,12 @@ export const validarJWT = async (req, res, next) => {
     try {
         const {id} = jwt.verify(token, process.env.LLAVESECRETA)
 
-        let usuario = await users.findById(id);
+        const usuario = await users.findById(id);
+        if (!usuario) {
+            return res.status(401).json({
+                msg: "Token no válido - usuario no existe en DB"
+            })
+        }
 
         req.usuario = usuario;
         next();

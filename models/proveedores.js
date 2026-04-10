@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { type } from "os";
 
 const proveedorEsquema = new mongoose.Schema({
     // Información general del proveedor
@@ -8,12 +9,17 @@ const proveedorEsquema = new mongoose.Schema({
         unique: true,
         trim: true
     },
-     RazonSocial: {
+    DV: {
+        type: String,
+        required: [true, 'El dígito de verificación es obligatorio'],
+        trim: true
+    },
+    RazonSocial: {
         type: String,
         required: [true, 'La razón social es obligatoria'],
         trim: true
     },
-   DireccionNotificacion: {
+    DireccionNotificacion: {
         type: String,
         required: [true, 'La dirección de notificación es obligatoria'],
         trim: true
@@ -41,6 +47,11 @@ const proveedorEsquema = new mongoose.Schema({
         required: [true, 'El nombre del representante legal es obligatorio'],
         trim: true
     },
+    TipoDocumentoRepresentante: {
+        type: String,
+        enum: ['Cédula de Ciudadanía', 'Cédula de Extranjería', 'Pasaporte', 'Otro'],
+        required: [true, 'El tipo de documento del representante legal es obligatorio']
+    },
     NumeroIdentificacion: {
         type: String,
         required: [true, 'El número de identificación del representante legal es obligatorio'],
@@ -54,6 +65,29 @@ const proveedorEsquema = new mongoose.Schema({
     CorreoElectronicoRepresentante: {
         type: String,
         required: [true, 'El correo electrónico del representante legal es obligatorio'],
+        trim: true,
+        lowercase: true
+    },
+
+    // Información del representante comercial
+    NombreRepresentanteComercial: {
+        type: String,
+        required: [true, 'El nombre del representante comercial es obligatorio'],
+        trim: true
+    },
+    CargoRepresentanteComercial: {
+        type: String,
+        required: [true, 'El cargo del representante comercial es obligatorio'],
+        trim: true
+    },
+    TelefonoRepresentanteComercial: {
+        type: String,
+        required: [true, 'El teléfono del representante comercial es obligatorio'],
+        trim: true
+    },
+    CorreoElectronicoRepresentanteComercial: {
+        type: String,
+        required: [true, 'El correo electrónico del representante comercial es obligatorio'],
         trim: true,
         lowercase: true
     },
@@ -75,6 +109,12 @@ const proveedorEsquema = new mongoose.Schema({
         enum: ['Persona Natural', 'Persona Jurídica'],
         required: [true, 'El tipo de contribuyente es obligatorio'],
         default: 'Persona Jurídica'
+    },
+    TipoProveedor: {
+        type: String,
+        enum: ['Ferretería', 'Materiales de Construcción', 'Servicios Generales', 'Suministros Industriales', 'Tecnología y Equipos', 'Diseño de obras civiles', 'Otro'],
+        required: [true, 'El tipo de proveedor es obligatorio'],
+        trim: true
     },
     AutorizaDatosPersonales: {
         type: Boolean,
@@ -101,6 +141,11 @@ const proveedorEsquema = new mongoose.Schema({
                     type: String,
                     required: [true, 'La URL o ruta del documento es obligatoria'],
                     trim: true
+                },
+                formato: {          // 👈 campo nuevo
+                    type: String,
+                    trim: true,
+                    default: ''
                 }
             }
         ],
@@ -115,6 +160,20 @@ const proveedorEsquema = new mongoose.Schema({
         type: String,
         enum: ['Pre-registro', 'Registrado', 'Actualizado', 'Pendiente Actualización', 'Inactivo'],
         default: 'Pre-registro'
+    },
+    fechaAprobacion: {
+        type: Date,
+        default: null
+    },
+    comentarioAprobacion: {
+        type: String,
+        trim: true,
+        default: null
+    },
+    aprobadoPor: {
+        type: mongoose.Schema.Types.ObjectId, 
+        ref: 'users', 
+        default: null
     },
 }, { timestamps: true });
 

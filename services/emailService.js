@@ -78,7 +78,7 @@ export const enviarCorreoRevisionEmpresa = async (proveedor) => {
         subject: 'Revisión de nuevo proveedor registrado',
         html: `<p>Se ha completado el registro de un nuevo proveedor.</p>
             <p><strong>Proveedor:</strong> ${proveedor.RazonSocial}</p>
-            <p><strong>NIT:</strong> ${proveedor.NIT}</p>
+            <p><strong>NIT:</strong> ${proveedor.NIT}-${proveedor.DV}</p>
             <p><strong>Correo proveedor:</strong> ${proveedor.CorreoElectronico}</p>
             <p><strong>Representante legal:</strong> ${proveedor.NombreRepresentante}</p>
             <p><strong>Responsable de facturación:</strong> ${proveedor.NombresApellidosResponsable}</p>
