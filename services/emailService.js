@@ -33,8 +33,8 @@ export const enviarCorreoRegistro = async (CorreoElectronico) => {
 
             <p>
             Por favor complete el proceso ingresando al siguiente enlace:<br>
-            <a href="${process.env.FRONTEND_URL}/#/formulario-proveedor/${token}">
-            ${process.env.FRONTEND_URL}/#/formulario-proveedor/${token}
+            <a href="${process.env.FRONTEND_URL_PRODUCCION}/#/formulario-proveedor/${token}">
+            ${process.env.FRONTEND_URL_PRODUCCION}/#/formulario-proveedor/${token}
             </a>
             </p>
 
