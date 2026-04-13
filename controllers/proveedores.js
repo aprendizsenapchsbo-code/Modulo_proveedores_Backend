@@ -2,6 +2,7 @@ import proveedores from "../models/proveedores.js";
 import Invitacion from "../models/invitacion.js";
 import { enviarCorreoRegistro, enviarCorreoRevisionEmpresa, enviarCorreoAprobacion } from "../services/emailService.js";
 import { enviarCorreoActualizacion } from "../services/emailServiceActualizacion.js";
+import path from 'path';
 import { cloudinary } from "../config/cloudinary.js";
 
 const httpProveedor = {
@@ -75,17 +76,24 @@ const httpProveedor = {
             const { token } = req.params;
             const {
                 NIT,
+                DV,
                 RazonSocial,
                 DireccionNotificacion,
                 Telefono,
                 Ciudad,
                 NombreRepresentante,
+                TipoDocumentoRepresentante,
                 NumeroIdentificacion,
                 TelefonoRepresentante,
                 CorreoElectronicoRepresentante,
+                NombreRepresentanteComercial,
+                CargoRepresentanteComercial,
+                TelefonoRepresentanteComercial,
+                CorreoElectronicoRepresentanteComercial,
                 NombresApellidosResponsable,
                 CorreoElectronicoResponsable,
                 TipoContribuyente,
+                TipoProveedor,
                 AutorizaDatosPersonales,
                 AutorizaConflictos,
                 Documentos
@@ -160,18 +168,25 @@ const httpProveedor = {
             // y mantener el estado como Pre-registro hasta que la empresa lo verifique
             const nuevoProveedor = await proveedores.create({
                 NIT,
+                DV,
                 RazonSocial,
                 DireccionNotificacion,
                 Telefono,
                 Ciudad,
                 CorreoElectronico: invitacion.CorreoElectronico,
                 NombreRepresentante,
+                TipoDocumentoRepresentante,
                 NumeroIdentificacion,
                 TelefonoRepresentante,
                 CorreoElectronicoRepresentante,
+                NombreRepresentanteComercial,
+                CargoRepresentanteComercial,
+                TelefonoRepresentanteComercial,
+                CorreoElectronicoRepresentanteComercial,
                 NombresApellidosResponsable,
                 CorreoElectronicoResponsable,
                 TipoContribuyente,
+                TipoProveedor,
                 AutorizaDatosPersonales,
                 AutorizaConflictos,
                 Documentos,
@@ -206,51 +221,60 @@ const httpProveedor = {
 
     // Función para subir documentos a Cloudinary
     subirDocumento: async (req, res) => {
-        try {
-            // Si multer + cloudinary funcionaron, el archivo ya está subido
-            // y req.file contiene la información
-            if (!req.file) {
-                return res.status(400).json({
-                    success: false,
-                    msg: "No se recibio ningún archivo"
-                });
-            }
-
-            // Subir el buffer a Cloudinary manualmente
-            const resultado = await new Promise((resolve, reject) => {
-                cloudinary.uploader.upload_stream(
-                    {
-                        folder: 'proveedores/documentos',
-                        resource_type: 'auto'
-                    },
-                    (error, result) => {
-                        if (error) reject(error);
-                        else resolve(result);
-                    }
-                ).end(req.file.buffer); // 👈 envía el archivo desde memoria
-            });
-
-            // Extraer lo que se necesita guardar en la base de datos
-            const documento = {
-                tipo: req.body.tipo,
-                nombre: req.file.originalname,
-                url: resultado.secure_url
-            };
-
-            res.status(200).json({
-                success: true,
-                data: documento,
-                msg: "Archivo subido exitosamente"
-            });
-
-        } catch (error) {
-            console.error('Error al subir el archivo', error),
-            res.status(500).json({
+    try {
+        if (!req.file) {
+            return res.status(400).json({
                 success: false,
-                msg: "Error al subir el archivo"
-            })
+                msg: "No se recibió ningún archivo"
+            });
         }
-    },
+
+        // Extrae la extensión del archivo original
+        const extension = path.extname(req.file.originalname)
+            .toLowerCase()
+            .replace('.', ''); // "pdf", "docx", "jpg", etc.
+
+        // Nombre limpio sin extensión para Cloudinary
+        const nombreSinExtension = path.basename(req.file.originalname, path.extname(req.file.originalname));
+
+        const resultado = await new Promise((resolve, reject) => {
+            cloudinary.uploader.upload_stream(
+                {
+                    folder: 'proveedores/documentos',
+                    resource_type: 'raw',
+                    type: 'upload',
+                    access_mode: 'public',
+                    format: extension,                          // 👈 fuerza el formato
+                    public_id: `${Date.now()}_${nombreSinExtension}`, // 👈 preserva el nombre
+                },
+                (error, result) => {
+                    if (error) reject(error);
+                    else resolve(result);
+                }
+            ).end(req.file.buffer);
+        });
+
+        const documento = {
+            tipo: req.body.tipo,
+            nombre: req.file.originalname,  // nombre original completo
+            url: resultado.secure_url,
+            formato: extension              // 👈 guarda la extensión
+        };
+
+        res.status(200).json({
+            success: true,
+            data: documento,
+            msg: "Archivo subido exitosamente"
+        });
+
+    } catch (error) {
+        console.error('Error al subir el archivo', error);
+        res.status(500).json({
+            success: false,
+            msg: "Error al subir el archivo"
+        });
+    }
+},
 
     // Actualizar datos del proveedor (Admin/Asistente)
     actualizarProveedor: async (req, res) => {
@@ -258,17 +282,25 @@ const httpProveedor = {
             const { id } = req.params;
             const {
                 NIT,
+                DV,
                 RazonSocial,
                 DireccionNotificacion,
                 Telefono,
                 Ciudad,
                 CorreoElectronico,
                 NombreRepresentante,
+                TipoDocumentoRepresentante,
                 NumeroIdentificacion,
                 TelefonoRepresentante,
                 CorreoElectronicoRepresentante,
+                NombreRepresentanteComercial,
+                CargoRepresentanteComercial,
+                TelefonoRepresentanteComercial,
+                CorreoElectronicoRepresentanteComercial,
                 NombresApellidosResponsable,
                 CorreoElectronicoResponsable,
+                TipoContribuyente,
+                TipoProveedor,
                 Documentos,
                 estadoProveedor
             } = req.body;
@@ -310,17 +342,26 @@ const httpProveedor = {
             // Preparar objeto de actualización
             const datosActualizar = {
                 NIT,
+                DV,
                 RazonSocial,
                 DireccionNotificacion,
                 Telefono,
                 Ciudad,
                 CorreoElectronico,
                 NombreRepresentante,
+                TipoDocumentoRepresentante,
                 NumeroIdentificacion,
                 TelefonoRepresentante,
                 CorreoElectronicoRepresentante,
+                NombreRepresentanteComercial,
+                CargoRepresentanteComercial,
+                TelefonoRepresentanteComercial,
+                CorreoElectronicoRepresentanteComercial,
                 NombresApellidosResponsable,
                 CorreoElectronicoResponsable,
+                TipoContribuyente,
+                TipoProveedor,
+                // estadoProveedor,
                 Documentos
             };
             Object.keys(datosActualizar).forEach(key => datosActualizar[key] === undefined && delete datosActualizar[key]);
@@ -334,7 +375,7 @@ const httpProveedor = {
             if (estadoProveedor === 'Registrado') {
                 try {
                     await enviarCorreoAprobacion(proveedorActualizado)
-                } catch (error) {
+                } catch (correoError) {
                     console.error('Error al enviar correo de aprobación:', correoError);
                 }
             }
@@ -360,17 +401,25 @@ const httpProveedor = {
             const { id } = req.params;
             const {
                 NIT,
+                DV,
                 RazonSocial,
                 DireccionNotificacion,
                 Telefono,
                 Ciudad,
                 CorreoElectronico,
                 NombreRepresentante,
+                TipoDocumentoRepresentante,
                 NumeroIdentificacion,
                 TelefonoRepresentante,
                 CorreoElectronicoRepresentante,
+                NombreRepresentanteComercial,
+                CargoRepresentanteComercial,
+                TelefonoRepresentanteComercial,
+                CorreoElectronicoRepresentanteComercial,
                 NombresApellidosResponsable,
                 CorreoElectronicoResponsable,
+                TipoContribuyente,
+                TipoProveedor,
                 Documentos
             } = req.body;
 
@@ -411,17 +460,25 @@ const httpProveedor = {
             // Actualizar el proveedor y cambiar estado a "Actualizado"
             const datosActualizar = {
                 NIT,
+                DV,
                 RazonSocial,
                 DireccionNotificacion,
                 Telefono,
                 Ciudad,
                 CorreoElectronico,
                 NombreRepresentante,
+                TipoDocumentoRepresentante,
                 NumeroIdentificacion,
                 TelefonoRepresentante,
                 CorreoElectronicoRepresentante,
+                NombreRepresentanteComercial,
+                CargoRepresentanteComercial,
+                TelefonoRepresentanteComercial,
+                CorreoElectronicoRepresentanteComercial,
                 NombresApellidosResponsable,
                 CorreoElectronicoResponsable,
+                TipoContribuyente,
+                TipoProveedor,
                 Documentos,
                 estadoProveedor: "Actualizado"
             };
@@ -477,6 +534,66 @@ const httpProveedor = {
             res.status(500).json({
                 success: false,
                 msg: "Error al solicitar la actualización"
+            });
+        }
+    },
+
+    aprobarPreRegistro: async (req, res) => {
+        try {
+            const { id } = req.params;
+            const { comentario } = req.body;
+
+            // Validar que el proveedor exista
+            const proveedor = await proveedores.findById(id);
+            if (!proveedor) {
+                return res.status(404).json({
+                    success: false,
+                    msg: "Proveedor no encontrado"
+                });
+            }
+
+            // Validar que el admin esté autenticado
+            if (!req.usuario) {
+                return res.status(401).json({
+                    success: false,
+                    msg: "No autenticado"
+                });
+            }
+
+            // Validar que el proveedor esté en estado "Pre-registro"
+            if (proveedor.estadoProveedor !== "Pre-registro") {
+                return res.status(400).json({
+                    success: false,
+                    msg: "Este proveedor ya esta registrado"
+                });
+            }
+
+            // Actualizar el estado del proveedor a "Registrado"
+            const proveedorActualizado = await proveedores.findByIdAndUpdate(id, {
+                estadoProveedor: "Registrado",
+                comentarioAprobacion: comentario || null,
+                fechaAprobacion: new Date(),
+                aprobadoPor: req.usuario._id 
+            }, { new: true });
+
+            // Enviar correo de aprobación al proveedor
+            try {
+                await enviarCorreoAprobacion(proveedorActualizado);
+            } catch (mailError) {
+                console.warn('Falló el envío del correo de aprobación:', mailError);
+            }
+
+            res.status(200).json({
+                success: true,
+                data: proveedorActualizado,
+                msg: "Pre-registro aprobado exitosamente"
+            });
+
+        } catch (error) {
+            console.error('Error al aprobar el pre-registro:', error);
+            res.status(500).json({
+                success: false,
+                msg: "Error al aprobar el pre-registro"
             });
         }
     },

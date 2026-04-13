@@ -8,6 +8,7 @@ const routes = Router();
 routes.get("/", /* validarJWT, */ httpProveedor.getProveedores)
 routes.post("/registro", /* validarJWT, */ httpProveedor.registroProveedor)
 routes.post("/registro/completar/:token", /* validarJWT, */ httpProveedor.completarRegistro)
+routes.post("/aprobar/pre-registro/:id", validarJWT, httpProveedor.aprobarPreRegistro)
 routes.put("/:id/solicitar-actualizacion", /* validarJWT, */ httpProveedor.solicitarActualizacion)
 routes.put("/:id/actualizar-datos", /* validarJWT, */ httpProveedor.actualizarDatosProveedor)
 routes.put("/:id", /* validarJWT, */ httpProveedor.actualizarProveedor)
