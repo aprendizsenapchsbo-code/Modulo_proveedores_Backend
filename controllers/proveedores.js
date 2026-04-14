@@ -31,6 +31,32 @@ const httpProveedor = {
         }
     },
 
+    getProveedorId: async (req, res) => {
+        try {
+            const { id } = req.params;
+
+            const proveedor = await proveedores.findById(id);
+            if (!proveedor) {
+                return res.status(404).json({
+                    success: false,
+                    msg: "Proveedor no encontrado"
+                });
+            }
+
+            res.status(200).json({
+                success: true,
+                data: proveedor
+            })
+
+        } catch (error) {
+            console.error('Error al encontrar el proveedor:', error);
+            res.status(500).json({
+                success: false,
+                msg: "Error al encontrar el proveedor"
+            });
+        }
+    },
+
     // Enviar correo al proveedor
     registroProveedor: async (req, res) => {
         try {
@@ -91,6 +117,7 @@ const httpProveedor = {
                 TelefonoRepresentanteComercial,
                 CorreoElectronicoRepresentanteComercial,
                 NombresApellidosResponsable,
+                CargoResponsableFacturacion,
                 CorreoElectronicoResponsable,
                 TipoContribuyente,
                 TipoProveedor,
@@ -184,6 +211,7 @@ const httpProveedor = {
                 TelefonoRepresentanteComercial,
                 CorreoElectronicoRepresentanteComercial,
                 NombresApellidosResponsable,
+                CargoResponsableFacturacion,
                 CorreoElectronicoResponsable,
                 TipoContribuyente,
                 TipoProveedor,
@@ -298,6 +326,7 @@ const httpProveedor = {
                 TelefonoRepresentanteComercial,
                 CorreoElectronicoRepresentanteComercial,
                 NombresApellidosResponsable,
+                CargoResponsableFacturacion,
                 CorreoElectronicoResponsable,
                 TipoContribuyente,
                 TipoProveedor,
@@ -358,10 +387,11 @@ const httpProveedor = {
                 TelefonoRepresentanteComercial,
                 CorreoElectronicoRepresentanteComercial,
                 NombresApellidosResponsable,
+                CargoResponsableFacturacion,
                 CorreoElectronicoResponsable,
                 TipoContribuyente,
                 TipoProveedor,
-                // estadoProveedor,
+                estadoProveedor,
                 Documentos
             };
             Object.keys(datosActualizar).forEach(key => datosActualizar[key] === undefined && delete datosActualizar[key]);
@@ -417,6 +447,7 @@ const httpProveedor = {
                 TelefonoRepresentanteComercial,
                 CorreoElectronicoRepresentanteComercial,
                 NombresApellidosResponsable,
+                CargoResponsableFacturacion,
                 CorreoElectronicoResponsable,
                 TipoContribuyente,
                 TipoProveedor,
@@ -476,6 +507,7 @@ const httpProveedor = {
                 TelefonoRepresentanteComercial,
                 CorreoElectronicoRepresentanteComercial,
                 NombresApellidosResponsable,
+                CargoResponsableFacturacion,
                 CorreoElectronicoResponsable,
                 TipoContribuyente,
                 TipoProveedor,

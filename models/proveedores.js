@@ -98,12 +98,18 @@ const proveedorEsquema = new mongoose.Schema({
         required: [true, 'Los nombres y apellidos del responsable de facturación son obligatorios'],
         trim: true
     },
+    CargoResponsableFacturacion: {
+        type: String,
+        required: [true, 'El cargo del representante comercial es obligatorio'],
+        trim: true
+    },
     CorreoElectronicoResponsable: {
         type: String,
         required: [true, 'El correo electrónico del responsable de facturación es obligatorio'],
         trim: true,
         lowercase: true
     },
+
     TipoContribuyente: {
         type: String,
         enum: ['Persona Natural', 'Persona Jurídica'],
@@ -112,9 +118,21 @@ const proveedorEsquema = new mongoose.Schema({
     },
     TipoProveedor: {
         type: String,
-        enum: ['Ferretería', 'Materiales de Construcción', 'Servicios Generales', 'Suministros Industriales', 'Tecnología y Equipos', 'Diseño de obras civiles', 'Otro'],
+        enum: ['Ferretería y Materiales de Construcción', 'EPPs', 'Servicios Generales', 'Suministros Industriales', 'Tecnología e TI', 'Diseño de obras civiles', 'Otro'],
         required: [true, 'El tipo de proveedor es obligatorio'],
         trim: true
+    },
+    OtroTipoProveedor: { 
+        type: String, 
+        trim: true,
+        // Validación: Solo requerido si TipoProveedor es 'Otro'
+        validate: {
+            validator: function(v) {
+                if (this.TipoProveedor !== 'Otro') return true;
+                return v && v.length > 0;
+            },
+            message: 'Debe especificar el tipo de proveedor cuando selecciona "Otro"'
+        }
     },
     AutorizaDatosPersonales: {
         type: Boolean,

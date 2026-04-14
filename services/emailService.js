@@ -17,6 +17,13 @@ const generarToken = () => {
     return crypto.randomBytes(30).toString('hex');
 }
 
+// Helper para construir URLs seguras
+const getUrlFrontend = (ruta) => {
+    const base = process.env.FRONTEND_URL_PRODUCCION || 'https://modulo-proveedores.vercel.app';
+    // Asegura que no haya doble slash // ni falte slash /
+    return `${base.replace(/\/$/, '')}/${ruta.replace(/^\//, '')}`;
+};
+
 export const enviarCorreoRegistro = async (CorreoElectronico) => {
 
     const token = generarToken();
@@ -71,19 +78,34 @@ export const enviarCorreoRegistro = async (CorreoElectronico) => {
 }
 
 export const enviarCorreoRevisionEmpresa = async (proveedor) => {
+    if (!proveedor || !proveedor._id) throw new Error("Proveedor inválido");
+    const id = proveedor._id;
+    const urlRevision = getUrlFrontend(`/aprobacion-pre-registro/${id}`)
+
     const destinatario = process.env.EMAIL_NOTIFICACION_EMPRESA || process.env.EMAIL_USER;
     const mailOptions = {
         from: process.env.EMAIL_USER,
         to: destinatario,
         subject: 'Revisión de nuevo proveedor registrado',
-        html: `<p>Se ha completado el registro de un nuevo proveedor.</p>
-            <p><strong>Proveedor:</strong> ${proveedor.RazonSocial}</p>
-            <p><strong>NIT:</strong> ${proveedor.NIT}-${proveedor.DV}</p>
-            <p><strong>Correo proveedor:</strong> ${proveedor.CorreoElectronico}</p>
-            <p><strong>Representante legal:</strong> ${proveedor.NombreRepresentante}</p>
-            <p><strong>Responsable de facturación:</strong> ${proveedor.NombresApellidosResponsable}</p>
-            <p>Por favor revise el registro y proceda con la validación.</p>
-            <p>Link de administración: ${process.env.FRONTEND_URL_PRODUCCION || 'https://modulo-proveedores.vercel.app'}</p>`
+        html:  `
+            <div style="font-family: Arial, sans-serif;">
+                <h3>Nuevo Proveedor Registrado</h3>
+                <p>Se ha completado el pre-registro y requiere validación administrativa.</p>
+                
+                <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+                    <tr><td style="padding: 5px; font-weight: bold;">Proveedor:</td><td>${proveedor.RazonSocial || 'N/A'}</td></tr>
+                    <tr><td style="padding: 5px; font-weight: bold;">NIT:</td><td>${proveedor.NIT || 'N/A'}-${proveedor.DV || '0'}</td></tr>
+                    <tr><td style="padding: 5px; font-weight: bold;">Rep. Legal:</td><td>${proveedor.NombreRepresentante || 'N/A'}</td></tr>
+                </table>
+
+                <p style="text-align: center;">
+                    <a href="${urlRevision}" 
+                       style="background-color: #28a745; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold;">
+                       Ir a Validar Proveedor
+                    </a>
+                </p>
+            </div>
+        `
     };
 
     try {
