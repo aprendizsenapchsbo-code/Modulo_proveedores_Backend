@@ -118,7 +118,7 @@ const proveedorEsquema = new mongoose.Schema({
     },
     TipoProveedor: {
         type: String,
-        enum: ['Ferretería y Materiales de Construcción', 'EPPs', 'Servicios Generales', 'Suministros Industriales', 'Tecnología e TI', 'Diseño de obras civiles', 'Otro'],
+        enum: ['Ferretería y materiales de construcción', 'EPP', 'Servicios generales', 'Consultoría ambiental', 'Suministros industriales', 'Tecnología', 'Diseño de obras civiles', 'Otro'],
         required: [true, 'El tipo de proveedor es obligatorio'],
         trim: true
     },
