@@ -1,6 +1,6 @@
 import proveedores from "../models/proveedores.js";
 import Invitacion from "../models/invitacion.js";
-import { enviarCorreoRegistro, enviarCorreoRevisionEmpresa, enviarCorreoAprobacion } from "../services/emailService.js";
+import { enviarCorreoRegistro, enviarCorreoRevisionEmpresa, enviarCorreoAprobacion, enviarCorreoRechazar } from "../services/emailService.js";
 import { enviarCorreoActualizacion } from "../services/emailServiceActualizacion.js";
 import path from 'path';
 import { cloudinary } from "../config/cloudinary.js";
@@ -34,6 +34,7 @@ const httpProveedor = {
     getProveedorId: async (req, res) => {
         try {
             const { id } = req.params;
+            console.log('Proveedor encontrado: ', id)
 
             const proveedor = await proveedores.findById(id);
             if (!proveedor) {
@@ -602,7 +603,7 @@ const httpProveedor = {
 
             // Actualizar el estado del proveedor a "Registrado"
             const proveedorActualizado = await proveedores.findByIdAndUpdate(id, {
-                estadoProveedor: "Registrado",
+                estadoProveedor: "Actualizado",
                 comentarioAprobacion: comentario || null,
                 fechaAprobacion: new Date(),
                 aprobadoPor: req.usuario._id 
@@ -626,6 +627,66 @@ const httpProveedor = {
             res.status(500).json({
                 success: false,
                 msg: "Error al aprobar el pre-registro"
+            });
+        }
+    },
+
+    rechazarPreRegistro: async (req, res) => {
+        try {
+            const { id } = req.params;
+            const { comentario } = req.body;
+
+            // Validar que el proveedor exista
+            const proveedor = await proveedores.findById(id);
+            if (!proveedor) {
+                return res.status(404).json({
+                    success: false,
+                    msg: "Proveedor no encontrado"
+                });
+            }
+
+            // Validar que el admin esté autenticado
+            if (!req.usuario) {
+                return res.status(401).json({
+                    success: false,
+                    msg: "No autenticado"
+                });
+            }
+
+            // Validar que el proveedor esté en estado "Pre-registro"
+            if (proveedor.estadoProveedor !== "Pre-registro") {
+                return res.status(400).json({
+                    success: false,
+                    msg: "Este proveedor ya esta registrado"
+                });
+            }
+
+            // Actualizar el estado del proveedor a "Inactivo"
+            const proveedorActualizado = await proveedores.findByIdAndUpdate(id, {
+                estadoProveedor: "Inactivo",
+                comentarioAprobacion: comentario || null,
+                fechaAprobacion: new Date(),
+                aprobadoPor: req.usuario._id 
+            }, { new: true });
+
+            // Enviar correo de aprobación al proveedor
+            try {
+                await enviarCorreoRechazar(proveedorActualizado);
+            } catch (mailError) {
+                console.warn('Falló el envío del correo de aprobación:', mailError);
+            }
+
+            res.status(200).json({
+                success: true,
+                data: proveedorActualizado,
+                msg: "Pre-registro rechazado"
+            });
+
+        } catch (error) {
+            console.error('Error al rechazar el pre-registro:', error);
+            res.status(500).json({
+                success: false,
+                msg: "Error al rechazar el pre-registro"
             });
         }
     },

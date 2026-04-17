@@ -99,7 +99,7 @@ export const enviarCorreoRevisionEmpresa = async (proveedor) => {
                 </table>
 
                 <p style="text-align: center;">
-                    <a href="${urlRevision}" 
+                    <a href="${process.env.FRONTEND_URL_PRODUCCION}/#/aprobacion-pre-registro/${id}" 
                        style="background-color: #28a745; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold;">
                        Ir a Validar Proveedor
                     </a>
@@ -158,6 +158,48 @@ export const enviarCorreoAprobacion = async (proveedor) => {
         };
     } catch (error) {
         console.error('Error al enviar el correo de aprobación:', error);
+        throw error;
+    }
+}
+
+export const enviarCorreoRechazar = async (proveedor) => {
+        const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: proveedor.CorreoElectronico,
+        subject: 'Resultado de pre-registro como proveedor',
+        html: `
+            <p>Estimado(a) <strong>${proveedor.NombreRepresentante}</strong>,</p>
+
+            <p>Le informamos que, tras la revisión de la información suministrada, su <strong>pre-registro como proveedor de PCH San Bartolomé</strong> no ha sido aprobado en esta ocasión.</p>
+
+            <p><strong>Motivo:</strong><br>
+            ${proveedor.comentarioAprobacion}</p>
+
+            <p><strong>Datos del pre-registro:</strong></p>
+            <ul>
+                <li><strong>Razón Social:</strong> ${proveedor.RazonSocial}</li>
+                <li><strong>NIT:</strong> ${proveedor.NIT}</li>
+                <li><strong>Estado:</strong> ${proveedor.estadoProveedor}</li>
+            </ul>
+
+            <p>Si requiere mayor información o desea realizar una nueva solicitud con los ajustes correspondientes, puede responder a este correo.</p>
+
+            <p>
+            Cordialmente,<br>
+            PCH San Bartolomé
+            </p>
+        `
+    };
+
+    try {
+        const info = await transporter.sendMail(mailOptions);
+        console.log('Correo de rechazo pre-registro enviado: ', info.messageId);
+        return {
+            success: true,
+            message: info.messageId
+        };
+    } catch (error) {
+        console.error('Error al enviar el correo de rechazo:', error);
         throw error;
     }
 }

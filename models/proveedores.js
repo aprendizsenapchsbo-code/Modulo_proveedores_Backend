@@ -176,7 +176,7 @@ const proveedorEsquema = new mongoose.Schema({
     },
     estadoProveedor: {
         type: String,
-        enum: ['Pre-registro', 'Registrado', 'Actualizado', 'Pendiente Actualización', 'Inactivo'],
+        enum: ['Pre-registro', 'Actualizado', 'Pendiente Actualización', 'Inactivo'],
         default: 'Pre-registro'
     },
     fechaAprobacion: {
