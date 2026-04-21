@@ -8,7 +8,7 @@ const routes = Router();
 routes.get("/", validarJWT, httpProveedor.getProveedores)
 routes.get("/:id", httpProveedor.getProveedorId)
 routes.post("/registro", /* validarJWT, */ httpProveedor.registroProveedor)
-routes.post("/registro/completar/:token", /* validarJWT, */ httpProveedor.completarRegistro)
+routes.post("/registro/completar/:token", httpProveedor.completarRegistro)
 routes.post("/aprobar/pre-registro/:id", validarJWT, httpProveedor.aprobarPreRegistro)
 routes.post("/rechazar/pre-registro/:id", validarJWT, httpProveedor.rechazarPreRegistro)
 routes.put("/:id/solicitar-actualizacion", /* validarJWT, */ httpProveedor.solicitarActualizacion)
@@ -17,6 +17,6 @@ routes.put("/:id", /* validarJWT, */ httpProveedor.actualizarProveedor)
 routes.delete("/:id", /* validarJWT, */ httpProveedor.eliminarProveedor)
 
 // Ruta para subir los archivos a cloudinary
-routes.post("/upload", /* validarJWT, */ upload.single('archivo'), httpProveedor.subirDocumento)
+routes.post("/upload", upload.single('archivo'), httpProveedor.subirDocumento)
 
 export default routes; 
