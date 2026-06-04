@@ -1,19 +1,35 @@
 // app.js
+console.log('AZURE_CLIENT_ID:', process.env.AZURE_CLIENT_ID ? '✅' : '❌');
+console.log('AZURE_TENANT_ID:', process.env.AZURE_TENANT_ID ? '✅' : '❌');
+console.log('SHAREPOINT_SITE_NAME:', process.env.SHAREPOINT_SITE_NAME);
+console.log('SHAREPOINT_FIRST_FOLDER:', process.env.SHAREPOINT_FIRST_FOLDER);
+console.log('SHAREPOINT_SECOND_FOLDER:', process.env.SHAREPOINT_SECOND_FOLDER);
+
 import "dotenv/config"
 import express from 'express';
-import mongoose from 'mongoose';
-import users from "./routes/users.js"
-import proveedores from "./routes/proveedores.js"
-import cors from "cors"
+/* import mongoose from 'mongoose';*/
+import cors from "cors";
+import morgan from "morgan";
+import users from "./routes/users.js";
+import proveedores from "./routes/proveedores.js";
+
 
 const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.use(cors({ 
+  origin: process.env.FRONTEND_URL_PRODUCCION || 'http://localhost:3000',
+  credentials: true
+}));
+
+// Parsear JSON
 app.use(express.json());
-app.use(cors({ origin: "*" }));
+app.use(express.urlencoded({ extended: true }));
 
-// Conexión cacheada para serverless
-let isConnected = false;
+// Logger HTTP
+app.use(morgan('combined'));
 
-const connectDB = async () => {
+/* const connectDB = async () => {
   if (isConnected) return;
 
   await mongoose.connect(process.env.MONGODB_URL, {
@@ -24,10 +40,10 @@ const connectDB = async () => {
  
   isConnected = true;
   console.log('✅ Base de datos conectada');
-};
+}; */
 
 // Middleware que conecta ANTES de cada request
-app.use(async (req, res, next) => {
+/* app.use(async (req, res, next) => {
   try {
     await connectDB();
     next();
@@ -35,15 +51,30 @@ app.use(async (req, res, next) => {
     console.error('❌ Error conectando DB:', err);
     res.status(500).json({ error: 'Error de conexión a la base de datos' });
   }
+}); */
+
+// Rutas Públicas
+app.get('/api/health', (req, res) => {
+  res.json({
+    success: true,
+    msg: 'Servidor funcionando correctamente',
+    timestamp: new Date().toISOString()
+  });
 });
 
 app.use("/api/usuario", users);
 app.use("/api/proveedor", proveedores);
 
-if (process.env.NODE_ENV !== 'production') {
-  app.listen(process.env.PORT || 3000, () => {
-    console.log(`Servidor escuchando en el puerto ${process.env.PORT || 3000}`);
-  });
-}
+
+
+// INICIAR SERVIDOR
+app.listen(PORT, () => {
+  console.log('Servidor Express iniciando');
+  console.log('='.repeat(50));
+  console.log(`Puerto ${PORT}`);
+  console.log(`Base de datos SharePoint`)
+  console.log(`CORS: ${/* process.env.FRONTEND_URL_PRODUCCION || */ process.env.URL_PRUEBAS}`);
+  
+});
 
 export default app;

@@ -1,24 +1,25 @@
-import proveedores from "../models/proveedores.js";
-import Invitacion from "../models/invitacion.js";
+import sharePointService from '../services/sharePointServices.js';
+// import Invitacion from "../models/invitacion.js";
 import { enviarCorreoRegistro, enviarCorreoRevisionEmpresa, enviarCorreoAprobacion, enviarCorreoRechazar } from "../services/emailService.js";
 import { enviarCorreoActualizacion } from "../services/emailServiceActualizacion.js";
 import path from 'path';
-import { cloudinary } from "../config/cloudinary.js";
+import fs from 'fs';
+import { error } from 'console';
+
 
 const httpProveedor = {
     getProveedores: async (req, res) => {
         try {
             console.log('🔍 [GET /api/proveedor] - Iniciando petición');
             
-            console.log('📋 Buscando proveedores en la BD...');
-            const proveedor = await proveedores.find();
-            
-            console.log('✅ Proveedores encontrados:', proveedor.length);
+            const proveedores = await sharePointService.getAllSuppliers();
+            console.log('📋 Buscando proveedores en SharePoint...');
 
             res.json({
                 success: true,
-                data: proveedor,
-                count: proveedor.length
+                data: proveedores,
+                count: proveedores.length,
+                mensaje: 'Búsqueda en SharePoint en desarrollo'
             });
 
         } catch (error) {
@@ -33,21 +34,22 @@ const httpProveedor = {
 
     getProveedorId: async (req, res) => {
         try {
-            const { id } = req.params;
+            const { id } = req.params; // Se espera que el id sea el NIT
             console.log('Proveedor encontrado: ', id)
 
-            const proveedor = await proveedores.findById(id);
+            const proveedor = await sharePointService.getSupplierByNit(id);
             if (!proveedor) {
                 return res.status(404).json({
                     success: false,
-                    msg: "Proveedor no encontrado"
+                    msg: 'Proveedor no encontrando'
                 });
             }
 
-            res.status(200).json({
+            return res.status(200).json({
                 success: true,
-                data: proveedor
-            })
+                data: proveedor,
+                mensaje: 'Búsqueda en SharePoint en desarrollo'
+            });
 
         } catch (error) {
             console.error('Error al encontrar el proveedor:', error);
@@ -64,35 +66,65 @@ const httpProveedor = {
             const { CorreoElectronico } = req.body;
 
             // Verificar que no exista una invitación pendiente para ese correo
-            const invitacionExistente = await Invitacion.findOne({
+            /* const invitacionExistente = await Invitacion.findOne({
                 CorreoElectronico,
                 estadoRegistro: 'pendiente'
             });
-
-            if (invitacionExistente) {
+            } */
+            if (!CorreoElectronico) {
                 return res.status(400).json({
                     success: false,
-                    msg: "Ya se ha enviado una invitación a este correo. Por favor, revisa tu bandeja de entrada."
-                })
+                    msg: "El correo electronico es obligatorio"
+                });
             }
+            console.log('Nuevo Pre-registro de proveedor');
+            console.log(`Email: ${CorreoElectronico}`);
 
-            // Enviar correo de registro
-            const { token } = await enviarCorreoRegistro(CorreoElectronico);
-            console.log(CorreoElectronico);
-
-
+            // Generar el token unico
+            const crypto = await import('crypto');
+            const token = crypto.default.randomBytes(32).toString('hex');
+            console.log(`Token generado: ${token.substring(0, 10)}...`);
+            
+            // Prepara datos iniciales para subir al SharePoint
+            const supplierData = {
+                CorreoElectronico,
+                fechaRegistroInicial: new Date().toISOString(),
+                estado: 'Invitación_enviada',
+                tokenRegistro: token
+            };
+            
+            // Guardar el registro inicial en el SharePoint
+            await sharePointService.registerSupplier(supplierData, null);
+            console.log('Registro inicial guardado en SharePoint');
+            
+            // Enviando correo de pre-registro
+            try {
+                await enviarCorreoRegistro(CorreoElectronico, token);
+                console.log('Correo de pre-registro enviado al proveedor');
+            } catch (emailError) {
+                console.error('Error al enviar el correo: ', emailError.message);
+                return res.status(500).json({
+                    success: false,
+                    msg: 'Error al enviar el correo de pre-registro',
+                    error: emailError.message
+                });
+            }
+            
             res.status(200).json({
                 success: true,
-                data: CorreoElectronico,
-                token: token,
-                msg: "Se ha enviado un correo de registro."
+                data: {
+                    CorreoElectronico,
+                    token
+                },
+                msg: "Se ha enviado un correo de pre-registro."
             })
 
         } catch (error) {
-            console.error('Error al enviar el correo de registro:', error);
+            console.error('Error al enviar el correo de pre-registro:', error.message);
             res.status(500).json({
                 success: false,
-                msg: "Error al enviar el correo de registro"
+                msg: "Error al enviar el correo de registro",
+                error: error.message
             });
         }
     },
@@ -125,10 +157,14 @@ const httpProveedor = {
                 AutorizaDatosPersonales,
                 AutorizaConflictos,
                 Documentos
-            } = req.body;
+                } = req.body;
+                
+                console.log('Completanto registro:');
+                console.log(`Token: ${token.substring(0, 10)}...`);
+            
 
             // Buscar la invitación por el token
-            const invitacion = await Invitacion.findOne({
+            /* const invitacion = await Invitacion.findOne({
                 tokenRegistro: token,
                 estadoRegistro: 'pendiente'
             });
@@ -138,70 +174,85 @@ const httpProveedor = {
                     success: false,
                     msg: "El enlace no es válido"
                 });
-            }
+            } */
 
             // Validar que el NIT no esté registrado
-            const nitExistente = await proveedores.findOne({ NIT });
+            /* const nitExistente = await proveedores.findOne({ NIT });
             if (nitExistente) {
                 return res.status(400).json({
                     success: false,
                     msg: "El NIT ya está registrado"
                 })
-            };
+            }; */
 
-            // Validar documentos obligatorios
-            if (!Array.isArray(Documentos) || Documentos.length === 0) {
-                return res.status(400).json({
-                    success: false,
-                    msg: "Debe enviar los documentos completos del proveedor"
-                });
-            }
-
-            const documentosInvalidos = Documentos.some(doc => !doc || !doc.tipo || !doc.nombre || !doc.url);
-            if (documentosInvalidos) {
-                return res.status(400).json({
-                    success: false,
-                    msg: "Cada documento debe incluir tipo, nombre y url"
-                });
-            }
-
-            // Validar que el correo de la invitación no esté registrado
-            const correoExistente = await proveedores.findOne({ 
-                CorreoElectronico: invitacion.CorreoElectronico 
-            });
-            if (correoExistente) {
-                return res.status(400).json({
-                    success: false,
-                    msg: "El correo ya está registrado"
-                })
-            }
-
+            // Validar autorizaciones
             const autorizaDatos = AutorizaDatosPersonales === true || AutorizaDatosPersonales === 'true';
             if (!autorizaDatos) {
+                if (req.file && fs.existsSync(req.file.path)) {
+                    fs.unlinkSync(req.file.path);
+                }
                 return res.status(400).json({
                     success: false,
-                    msg: "Debe autorizar el tratamiento de datos personales para completar el registro"
-                })
+                    msg: 'Debe autorizar el tratamiento de datos personales'
+                });
             }
 
             const autorizaConflictos = AutorizaConflictos === true || AutorizaConflictos === 'true';
             if (!autorizaConflictos) {
+                if (req.file && fs.existsSync(req.file.path)) {
+                    fs.unlinkSync(req.file.path);
+                }
                 return res.status(400).json({
                     success: false,
-                    msg: "Debe autorizar el tratamiento de conflictos e intereses para completar el registro"
-                })
+                    msg: 'Debe autorizar el tratamiento de conflictos e intereses'
+                });
             }
+
+            // Validar documentos si se envio
+            if(req.file) {
+                const ext = path.extname(req.file.originalname).toLowerCase();
+                const isMimeValid = req.file.mimetype === 'application/pdf';
+                const isExtValid = ext === '.pdf';
+                
+                if (!isMimeValid || !isExtValid) {
+                    fs.unlinkSync(req.file.path);
+                    return res.status(400).json({
+                        success: false,
+                        msg: 'El documento debe ser un archivo PDF'
+                    });
+                }
+                console.log(`Documento: ${req.file.originalname}`);
+                
+            }
+            
+            // Validar documentos en array si existen
+            if (Documentos && Array.isArray(Documentos) && Documentos.length > 0) {
+                const documentosInvalidos = Documentos.some(doc => !doc || !doc.tipo || !doc.nombre);
+                if (documentosInvalidos) {
+                    if (req.file && fs.existsSync(req.file.path)) {
+                        fs.unlinkSync(req.file.path);
+                    }
+                    return res.status(400).json({
+                        success: false,
+                        msg: "Cada documento debe incluir tipo y nombre"
+                    });
+                }
+            }
+
+            console.log(`NIT: ${NIT}`);
+            console.log(`Razón Social: ${RazonSocial}`);
+            
 
             // Crear el proveedor con el correo que ya está verificado
             // y mantener el estado como Pre-registro hasta que la empresa lo verifique
-            const nuevoProveedor = await proveedores.create({
+            const proveedorCompleto = {
                 NIT,
                 DV,
                 RazonSocial,
                 DireccionNotificacion,
                 Telefono,
                 Ciudad,
-                CorreoElectronico: invitacion.CorreoElectronico,
+                CorreoElectronico,
                 NombreRepresentante,
                 TipoDocumentoRepresentante,
                 NumeroIdentificacion,
@@ -218,37 +269,57 @@ const httpProveedor = {
                 TipoProveedor,
                 AutorizaDatosPersonales,
                 AutorizaConflictos,
-                Documentos,
-                estadoProveedor: 'Pre-registro'
-            });
+                Documentos: Documentos || [],
+                estadoProveedor: 'Pre-registro',
+                fechaRegistroCompleto: new Date().toISOString(),
+                tokenRegistro: token,
+                documentoPrincipal: req.file ? req.file.originalname : null
+            };
 
-            // Invalidar el link marcando la invitación como completada
-            await Invitacion.findByIdAndUpdate(invitacion._id, {
-                estadoRegistro: 'completado'
-            })
+            // Actualizar en SharePoint (con o sin archivo)
+            const rutaArchivo = req.file ? req.file.path : null;
+            await sharePointService.registerSupplier(proveedorCompleto, rutaArchivo);
 
-            try {
-                await enviarCorreoRevisionEmpresa(nuevoProveedor);
-            } catch (correoError) {
-                console.error('Error al notificar a la empresa:', correoError);
+            console.log('Datos guardados en SharePoint');
+
+            // Limpiar archivo temporal si existe
+            if (req.file && fs.existsSync(req.file.path)) {
+                fs.unlinkSync(req.file.path);
             }
-
+            
+            // Enviar correo a la empresa para revisión
+            try {
+                await enviarCorreoRevisionEmpresa(proveedorCompleto);
+                console.log('Correo de revisión enviado a la empresa')
+            } catch (emailError) {
+                console.error('Error al notificar a la empresa:', emailError);
+            }
+            
             res.status(200).json({
                 success: true,
-                data: nuevoProveedor,
+                data: {
+                    NIT,
+                    RazonSocial,
+                    CorreoElectronico,
+                    estadoProveedor: 'Pre-registro'
+                },
                 msg: "Registro completado exitosamente"
             });
-
+            
         } catch (error) {
-            console.error('Error al completar el registro:', error);
+            console.error('Error al completar el registro:', error.message);
+            if (req.file && fs.existsSync(req.file.path)) {
+                fs.unlinkSync(req.file.path);
+            }
             res.status(500).json({
                 success: false,
-                msg: "Error al completar el registro"
+                msg: "Error al completar el registro",
+                error: error.message
             });
         }
     },
 
-    // Función para subir documentos a Cloudinary
+    /* // Función para subir documentos a Cloudinary
     subirDocumento: async (req, res) => {
     try {
         if (!req.file) {
@@ -303,39 +374,18 @@ const httpProveedor = {
             msg: "Error al subir el archivo"
         });
     }
-},
+}, */
 
     // Actualizar datos del proveedor (Admin/Asistente)
     actualizarProveedor: async (req, res) => {
         try {
             const { id } = req.params;
-            const {
-                NIT,
-                DV,
-                RazonSocial,
-                DireccionNotificacion,
-                Telefono,
-                Ciudad,
-                CorreoElectronico,
-                NombreRepresentante,
-                TipoDocumentoRepresentante,
-                NumeroIdentificacion,
-                TelefonoRepresentante,
-                CorreoElectronicoRepresentante,
-                NombreRepresentanteComercial,
-                CargoRepresentanteComercial,
-                TelefonoRepresentanteComercial,
-                CorreoElectronicoRepresentanteComercial,
-                NombresApellidosResponsable,
-                CargoResponsableFacturacion,
-                CorreoElectronicoResponsable,
-                TipoContribuyente,
-                TipoProveedor,
-                Documentos,
-                estadoProveedor
-            } = req.body;
+            const { datosActualizar } = req.body;
 
-            // Validar que el proveedor exista
+            console.log('Actualizando proveedor en SharePoint');
+            console.log(`ID ${id}`)
+
+            /* // Validar que el proveedor exista
             const proveedorExistente = await proveedores.findById(id);
             if(!proveedorExistente) {
                 return res.status(404).json({
@@ -409,11 +459,11 @@ const httpProveedor = {
                 } catch (correoError) {
                     console.error('Error al enviar correo de aprobación:', correoError);
                 }
-            }
+            } */
 
             res.status(200).json({
                 success: true,
-                data: proveedorActualizado,
+                data: datosActualizar,
                 msg: "Proveedor actualizado exitosamente"
             });
 
