@@ -1,5 +1,6 @@
 import axios from "axios";
 import authService from "./authService.js";
+import { token } from "morgan";
 
 /*
 Servicio de Usuarios en SharePoint
@@ -16,13 +17,21 @@ class UsersService {
         this.graphApiUrl = process.env.MICROSOFT_GRAPH_API;
         this.siteName = process.env.SHAREPOINT_SITE_NAME;
         this.driveId = process.env.SHAREPOINT_ID_SIG;
-        this.rootFolder = process.env.SHAREPOINT_DOCUMENTOS_FOLDER; // Carpeta raiz
+        this.basePath = process.env.SHAREPOINT_DOCUMENTOS_FOLDER; // Carpeta raiz
         this.usersFolder = 'Usuarios'; // Carpeta para almacenar los usuarios
     }
+
+    // Codificar cada segmento de la ruta para evitar problemas con caracteres especiales
+    encodedPath(path) {
+        return path.split('/').map(segment => encodeURIComponent(segment)).join('/');
+    }
+
+    // ------------SITIO Y DRIVE----------------
 
     // Obtiene el ID del sitio de SharePoint
     async getSiteId() {
         try {
+            if (this.siteId) return this.siteId; // Cacheamos el siteId para evitar múltiples llamadas
             const token = await authService.getAccessToken();
 
             const response = await axios.get(
@@ -40,6 +49,7 @@ class UsersService {
             }
             
             const siteId = response.data.value[0].id;
+            this.siteId = siteId; // Guardamos el siteId para futuras llamadas
             console.log('ID del sitio obtenido: ' + siteId);
             return siteId;
         } catch (error) {
@@ -49,7 +59,7 @@ class UsersService {
     }
 
     // Consultar driveId de la biblioteca SIG
-    async getDriveId(siteId, driveName = 'SIG') {
+    async getDriveId( driveName = 'SIG') {
         try {
             if (this.driveId) return this.driveId;
             // Si no está en variables de entorno, se busca por nombre
@@ -66,6 +76,12 @@ class UsersService {
             );
 
             const drive = res.data.value.find(d => d.name === driveName);
+            if (!drive) {
+                throw new Error(`Biblioteca "${driveName}" no encontrada`);
+            }
+            this.driveId = drive.id; // Guardamos el driveId para futuras llamadas
+            console.log('ID del drive obtenido: ' + this.driveId);
+            return drive.id;
 
         } catch (error) {
             console.error('Error al obtener ID del drive:', error.message);
@@ -73,7 +89,7 @@ class UsersService {
         }
     }
 
-    async diagnosticarEstructura(siteId) {
+    /* async diagnosticarEstructura(siteId) {
         console.log("DIAGNOSTICO DE CARPETAS EN SHAREPOINT");
         await this.explorarTodo(siteId);
     }
@@ -92,9 +108,9 @@ class UsersService {
                 console.log(`${'  '.repeat(nivel)}📄 ${item.name}`);
             }
         }
-    }
+    } */
     
-    // METODO TEMPORAL para listar toda la jerarquia
+    /* // METODO TEMPORAL para listar toda la jerarquia
     async explorarHastaEncontrar(siteId, nombreBuscado, parentId = null, nivel = 0) {
         const token = await authService.getAccessToken();
         const url = parentId
@@ -121,14 +137,15 @@ class UsersService {
             }
         }
         return null;
-    }
+    } */
 
-    // Obtener el ID de la carpeta raiz "API Documentos Proveedores Prueba"
-    async getRootFolderId(siteId) {
-        const token = await authService.getAccessToken();
+    /* // Obtener el ID de la carpeta raiz "API Documentos Proveedores Prueba"
+    async getRootFolderId(siteId, driveId) {
+        
         const folderPath = this.rootFolder;
         const encodedPath = folderPath.split('/').map(segment => encodeURIComponent(segment)).join('/');
-        const url = `${this.graphApiUrl}/sites/${siteId}/drive/root:/${encodedPath}`;
+        const url = `${this.graphApiUrl}/sites/${siteId}/drives/${driveId}/root:/${encodedPath}`;
+        const token = await authService.getAccessToken();
 
         try {
             const response = await axios.get(url,
@@ -147,32 +164,24 @@ class UsersService {
             return response.data.id;
             
         } catch (error) {
-            if (error.response?.status === 404) {
-                // Si no existe, créala (incluyendo las carpetas intermedias)
-                console.log(`Carpeta no existe, creando: ${folderPath}`);
-                await this.createFolderPath(siteId, folderPath);
-                // Luego obtener el ID de la carpeta creada
-                const response2 = await axios.get(url,
-                    {
-                        headers: {
-                            Authorization: `Bearer ${token}`
-                        }
-                    }
-                );
-                return response2.data.id
-            }
+            console.error('Error al obtener la carpeta raíz:', error.message);
             throw error;
         }
-    }
+    } */
+
+        // ----------CARPETAS-----------
 
     // Método auxiliar para crear carpetas anidadas
-    async createFolderPath(siteId, folderPath) {
+    async ensureFolder(folderPath) {
+        const siteId = await this.getSiteId();
+        const driveId = await this.getDriveId();
         const token = await authService.getAccessToken();
         const parts = folderPath.split('/');
         let currentPath = '';
+
         for (const part of parts) {
             currentPath = currentPath ? `${currentPath}/${part}` : part;
-            const folderUrl = `${this.graphApiUrl}/sites/${siteId}/drive/root:/${currentPath}`;
+            const folderUrl = `${this.graphApiUrl}/sites/${siteId}/drives/${driveId}/root:/${currentPath}`;
             try {
                 await axios.get(folderUrl, 
                     {
@@ -201,7 +210,36 @@ class UsersService {
         }
     }
 
-    // Crear carpeta de usuario si no existe
+    // Obtener el ID de la carpeta
+    async getFolderId(folderPath) {
+        try {
+            const siteId = await this.getSiteId();
+            const driveId = await this.getDriveId();
+            const token = await authService.getAccessToken();
+
+            const encodedPath = this.encodedPath(folderPath);
+            const url = `${this.graphApiUrl}/sites/${siteId}/drives/${driveId}/root:/${encodedPath}`;
+
+            const res = await axios.get(url,
+                {
+                    headers: {
+                        Authorization: `Bearer ${token}`
+                    }
+                }
+            );
+
+            if (!res) {
+                throw new Error(`No se encontró la carpeta: ${folderPath}`);
+            }
+            return res.data.id;
+            
+        } catch (error) {
+            console.error('Error al obtener el ID de la carpeta:', error.message);
+            throw error;
+        }
+    }
+
+    /* // Crear carpeta de usuario si no existe
     async getOrCreateUsersFolder(siteId, rootFolderId) {
         try {
         const token = await authService.getAccessToken();
@@ -234,16 +272,16 @@ class UsersService {
                 }
             }
         );
-
+    
         console.log(`Carpeta ${folderName} creada`);
         return createRes.data.id;
         } catch (error) {
             console.error('Error al crear la carpeta de usuarios:', error.message);
             throw error
         }
-    }
+    } */
 
-    // METODO TEMPORAL PARA MIRAR CUANTAS CARPETAS HAY
+    /* // METODO TEMPORAL PARA MIRAR CUANTAS CARPETAS HAY
     async listarCarpetas(siteId, parentFolderId = null) {
         try {
             const token = await authService.getAccessToken();
@@ -271,9 +309,9 @@ class UsersService {
             console.error('Error al listar las carpetas:', error.message);
             throw error;
         }
-    }
+    } */
     
-    // Obtiene el ID de la carpeta de usuarios
+    /* // Obtiene el ID de la carpeta de usuarios
     async getUsersFolderId(siteId, rootFolderId) {
         try {
             const token = await authService.getAccessToken();
@@ -300,20 +338,72 @@ class UsersService {
             throw error;
         }
     }
+ */
+    // ------------USUARIOS---------------
+
+    // Busca un usuario por email en SharePoint
+    async getUserByEmail(email) {
+        try {
+            const usersFolderPath = `${this.basePath}/${this.usersFolder}`;
+            const emailLower = email.toLowerCase();
+            const fileName = `${emailLower.replace(/[^a-zA-Z0-9]/g, '_')}.json`;
+            const filePath = `${usersFolderPath}/${fileName}`;
+            const encodedPath = this.encodedPath(filePath);
+            const siteId = await this.getSiteId();
+            const driveId = await this.getDriveId();
+            const token = await authService.getAccessToken();
+            const url = `${this.graphApiUrl}/sites/${siteId}/drives/${driveId}/root:/${encodedPath}`;
+            console.log("Buscando usuario en:", url);
+            
+
+            const response = await axios.get(url,
+                {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+
+            console.log('Usuario encontrado en SharePoint');
+            
+            const contentRes = await axios.get(`${url}:/content`,
+                {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                    }
+                }
+            );
+            
+            return contentRes.data;
+        } catch (error) {
+            console.error('Error al obtener el usuario:', error.message?.status, error.response?.data);
+            if (error.response?.status === 404) {
+                return null; // Usuario no encontrado
+            }
+            throw error;
+        }
+    }
 
     // Crea un archivo JSON con los datos del usuario
-    async createUser(siteId, usersFolderId, userData) {
+    async createUser(userData) {
         try {
-            const token = await authService.getAccessToken();
-
+            const usersFolderPath = `${this.basePath}/${this.usersFolder}`;
+            await this.ensureFolder(usersFolderPath);
             // Crear nombre de archivo único basado en email
             const fileName = `${userData.email.replace(/[^a-zA-Z0-9]/g, '_')}.json`;
-
+            const filePath = `${usersFolderPath}/${fileName}`;
+            const encodedPath = this.encodedPath(filePath);
+            const siteId = await this.getSiteId();
+            const driveId = await this.getDriveId();
+            const token = await authService.getAccessToken();
+            const url = `${this.graphApiUrl}/sites/${siteId}/drives/${driveId}/root:/${encodedPath}:/content`;
+            console.log("Usuario creado en: ", url);
+            
             // Convertir los datos en JSON
             const jsonContent = JSON.stringify(userData, null, 2);
             
-            const response = await axios.put(
-                `${this.graphApiUrl}/sites/${siteId}/drive/items/${usersFolderId}:/${fileName}:/content`,
+            const response = await axios.put(url,
                 jsonContent,
                 {
                     headers: {
@@ -330,57 +420,104 @@ class UsersService {
             throw error
         }
     }
-
-    // Busca un usuario por email en SharePoint
-    async getUserByEmail(siteId, usersFolderId, email) {
+    
+    // Obtiene todos los usuarios (para admin)
+    async getAllUsers() {
         try {
+            const usersFolderPath = `${this.basePath}/${this.usersFolder}`;
+            const siteId = await this.getSiteId();
+            const driveId = await this.getDriveId();
             const token = await authService.getAccessToken();
-            const expectedFileName = `${email.replace(/[^a-zA-Z0-9]/g, '_')}.json`;
-
-            // Buscar archivos en la carpeta de usuarios
-            const response = await axios.get(
-                `${this.graphApiUrl}/sites/${siteId}/drive/items/${usersFolderId}/children`,
+            const folderId = await this.getFolderId(usersFolderPath);
+            const childrenUrl = `${this.graphApiUrl}/sites/${siteId}/drives/${driveId}/items/${folderId}/children`;
+            
+            const response = await axios.get(childrenUrl,
                 {
                     headers: {
-                        Authorization: `Bearer ${token}`,
-                        'Content-Type': 'application/json'
+                        Authorization: `Bearer ${token}`
                     }
                 }
             );
             
-            if (!response.data.value) {
-                return null
-            }
-            
-            // Buscar archivo que contenga el email en el nombre
-            const usuarioFile = response.data.value?.find(file => file.name === expectedFileName);
-            
-            if (!usuarioFile) {
-                return null;
-            }
-            
-            // Obtener el contenido del archivo
-            const fileContent = await axios.get(
-                `${this.graphApiUrl}/sites/${siteId}/drive/items/${usuarioFile.id}/content`,
-                {
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                    }
+            const usuarios = [];
+            for (const item of response.data.value || []) {
+                if (item.name.endsWith('.json')) {
+                    const content = await axios.get(
+                        `${this.graphApiUrl}/sites/${siteId}/drives/${driveId}/items/${item.id}/content`,
+                        {
+                            headers: {
+                                Authorization: `Bearer ${token}`
+                            }
+                        });
+                    usuarios.push(content.data);
                 }
-            );
-            
-            return fileContent.data;
+            }
+            return usuarios;
         } catch (error) {
-            console.error('Error al obtener el usuario:', error.message);
-            return null;
+            console.error('Error al obtener todos los usuarios:', error.message);
+            throw error;
         }
     }
-    
+
+    // Actualizar un usuario
+    async updateUser(email, updateData) {
+        try {
+            const usersFolderPath = `${this.basePath}/${this.usersFolder}`;
+            await this.ensureFolder(usersFolderPath);
+            const fileName = `${email.replace(/[^a-zA-Z0-9]/g, '_')}.json`;
+            const filePath = `${usersFolderPath}/${fileName}`;
+            const encodedPath = this.encodedPath(filePath);
+            const siteId = await this.getSiteId();
+            const driveId = await this.getDriveId();
+            const token = await authService.getAccessToken();
+            const url = `${this.graphApiUrl}/sites/${siteId}/drives/${driveId}/root:/${encodedPath}`;
+            
+            // Buscar el archivo del usuario
+            const existing = await axios.get(url,
+                {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                    }
+                }
+            );
+            
+            const contentUrl = `${url}:/content`;
+            const oldContent = await axios.get(contentUrl,{
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            });
+            
+            // Mezclar datos actuales con actualizaciones
+            const updateUser = {
+                ...oldContent.data,
+                ...updateData,
+                updateAt: new Date().toISOString()
+            };
+            
+            // Actualizar archivo
+            await axios.put(contentUrl, JSON.stringify(updateUser, null, 2), {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            console.log(`Usuario actualizado: ${email}`);
+            return updateUser;
+            
+        } catch (err) {
+            if (err.response?.status === 404) {
+                throw new Error(`Usuario no encontrado`);
+            }
+            throw err;
+        }
+    }
     /* 
     Autentica un usuario (valida email y contraseña)
     Importante Las contraseñas deben estar encriptadas en SharePoint
     */
-   async authenticateUser(email, password) {
+   /* async authenticateUser(email, password) {
        try {
            console.log(`Autenticando usuario: ${email}`);
            
@@ -409,9 +546,9 @@ class UsersService {
             console.error('Error al autenticar el usuario:', error.message);
             throw error;
         }
-    }
+    } */
     
-    // Validar si un email ya existe
+   /*  // Validar si un email ya existe
     async emailExiste(siteId, usersFolderId, email) {
         try {
             const usuario = await this.getUserByEmail(siteId, usersFolderId, email);
@@ -420,9 +557,9 @@ class UsersService {
             console.error('Error al verificar email:', error.message);
             return false;
         }
-    }
+    } */
     
-    // Crear un nuevo usuario (registro)
+    /* // Crear un nuevo usuario (registro)
     async registerUser(userData) {
         try {
             console.log(`Registrando nuevo usuario: ${userData.email}`);
@@ -448,131 +585,25 @@ class UsersService {
             console.error('Error al registrar nuevo usuario:', error.message);
             throw error;
         }
-    }
+    } */
     
-    // Obtiene todos los usuarios (para admin)
-    async getAllUsers(siteId, usersFolderId) {
-        try {
-            const token = await authService.getAccessToken();
-            
-            const response = await axios.get(
-                `${this.graphApiUrl}/sites/${siteId}/drive/items/${usersFolderId}/children`,
-                {
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    }
-                }
-            );
-            
-            const usuarios = [];
-            for (const file of response.data.value || []) {
-                if (file.name.endsWith('.json')) {
-                    const content = await axios.get(
-                        `${this.graphApiUrl}/sites/${siteId}/drive/items/${file.id}/content`,
-                        {
-                            headers: {
-                                Authorization: `Bearer ${token}`
-                            }
-                        }
-                    );
-                    usuarios.push(content.data);
-                }
-            }
-            return usuarios;
-        } catch (error) {
-            console.error('Error al obtener todos los usuarios:', error.message);
-            throw error;
-        }
-    }
     
-    // Actualizar un usuario
-    async actualizarUsuario(siteId, usersFolderId, email, datosActualizar) {
-        try {
-            const token = await authService.getAccessToken();
-            const expectedFileName = `${email.replace(/[^a-zA-Z0-9]/g, '_')}.json`;
-            
-            // Buscar el archivo del usuario
-            const response = await axios.get(
-                `${this.graphApiUrl}/sites/${siteId}/drive/items/${usersFolderId}/children`,
-                {
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    }
-                }
-            );
-            
-            const usuarioFile = response.data.value?.find(file => file.name === expectedFileName);
-            
-            if (!usuarioFile) {
-                return null;
-            }
-            
-            // Obtener datos actuales
-            const fileContent = await axios.get(
-                `${this.graphApiUrl}/sites/${siteId}/drive/items/${usuarioFile.id}/content`,
-                {
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                    }
-                }
-            );
-            
-            // Mezclar datos actuales con actualizaciones
-            const usuarioActulizado = {
-                ...fileContent.data,
-                ...datosActualizar,
-                updateAt: new Date().toISOString()
-            };
-            
-            // Actualizar archivo
-            const jsonContent = JSON.stringify(usuarioActulizado, null, 2);
-            await axios.put(
-                `${this.graphApiUrl}/sites/${siteId}/drive/items/${usuarioFile.id}:/content`,
-                jsonContent,
-                {
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    }
-                }
-            );
-            console.log(`Usuario actualizado: ${email}`);
-            return usuarioActulizado;
-            
-        } catch (error) {
-            console.error('Error al actualizar el usuario:', error.message);
-            throw error;
-        }
-    }
     
     // Eliminar un usuario
-    async deleteUser(siteId, usersFolderId, email) {
+    async deleteUser(email) {
         try {
+            const usersFolderPath = `${this.basePath}/${this.usersFolder}`;
+            await this.ensureFolder(usersFolderPath);
+            const fileName = `${email.replace(/[^a-zA-Z0-9]/g, '_')}.json`;
+            const filePath = `${usersFolderPath}/${fileName}`;
+            const encodedPath = this.encodedPath(filePath);
+            const siteId = await this.getSiteId();
+            const driveId = await this.getDriveId();
             const token = await authService.getAccessToken();
-            const expectedFileName = `${email.replace(/[^a-zA-Z0-9]/g, '_')}.json`;
-            
-            // Buscar el archivo del usuario
-            const response = await axios.get(
-                `${this.graphApiUrl}/sites/${siteId}/drive/items/${usersFolderId}/children`,
-                {
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    }
-                }
-            );
-
-            const usuarioFile = response.data.value?.find(file => file.name === expectedFileName);
-            
-            if (!usuarioFile) {
-                return null;
-            }
+            const url = `${this.graphApiUrl}/sites/${siteId}/drives/${driveId}/root:/${encodedPath}`;
             
             // ELiminar archivo
-            await axios.delete(
-                `${this.graphApiUrl}/sites/${siteId}/drive/items/${usuarioFile.id}`,
+            await axios.delete(url,
                 {
                     headers: {
                         Authorization: `Bearer ${token}`

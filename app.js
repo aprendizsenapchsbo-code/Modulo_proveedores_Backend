@@ -2,8 +2,6 @@
 console.log('AZURE_CLIENT_ID:', process.env.AZURE_CLIENT_ID ? '✅' : '❌');
 console.log('AZURE_TENANT_ID:', process.env.AZURE_TENANT_ID ? '✅' : '❌');
 console.log('SHAREPOINT_SITE_NAME:', process.env.SHAREPOINT_SITE_NAME);
-console.log('SHAREPOINT_FIRST_FOLDER:', process.env.SHAREPOINT_FIRST_FOLDER);
-console.log('SHAREPOINT_SECOND_FOLDER:', process.env.SHAREPOINT_SECOND_FOLDER);
 
 import "dotenv/config"
 import express from 'express';

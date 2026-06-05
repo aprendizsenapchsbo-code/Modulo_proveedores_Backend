@@ -34,10 +34,10 @@ const httpProveedor = {
 
     getProveedorId: async (req, res) => {
         try {
-            const { id } = req.params; // Se espera que el id sea el NIT
-            console.log('Proveedor encontrado: ', id)
+            const { nit } = req.params; // Se espera que el id sea el NIT
+            console.log('Proveedor encontrado: ', nit)
 
-            const proveedor = await sharePointService.getSupplierByNit(id);
+            const proveedor = await sharePointService.getSupplierByNit(nit);
             if (!proveedor) {
                 return res.status(404).json({
                     success: false,
@@ -65,12 +65,6 @@ const httpProveedor = {
         try {
             const { CorreoElectronico } = req.body;
 
-            // Verificar que no exista una invitación pendiente para ese correo
-            /* const invitacionExistente = await Invitacion.findOne({
-                CorreoElectronico,
-                estadoRegistro: 'pendiente'
-            });
-            } */
             if (!CorreoElectronico) {
                 return res.status(400).json({
                     success: false,
@@ -94,7 +88,7 @@ const httpProveedor = {
             };
             
             // Guardar el registro inicial en el SharePoint
-            await sharePointService.registerSupplier(supplierData, null);
+            await sharePointService.saveSupplierData(supplierData, null);
             console.log('Registro inicial guardado en SharePoint');
             
             // Enviando correo de pre-registro
@@ -132,14 +126,22 @@ const httpProveedor = {
     // Completar registro del proveedor
     completarRegistro: async (req, res) => {
         try {
+            let proveedorData;
+            if (req.body.datosProveedor) {
+                proveedorData = JSON.parse(req.body.datosProveedor);
+            } else {
+                proveedorData = req.body;
+            }
+            console.log('Datos recibidos:', proveedorData);
             const { token } = req.params;
-            const {
+            const { 
                 NIT,
                 DV,
                 RazonSocial,
                 DireccionNotificacion,
                 Telefono,
                 Ciudad,
+                CorreoElectronico,
                 NombreRepresentante,
                 TipoDocumentoRepresentante,
                 NumeroIdentificacion,
@@ -154,36 +156,21 @@ const httpProveedor = {
                 CorreoElectronicoResponsable,
                 TipoContribuyente,
                 TipoProveedor,
-                AutorizaDatosPersonales,
                 AutorizaConflictos,
+                AutorizaDatosPersonales,
                 Documentos
-                } = req.body;
+             } = proveedorData;
                 
-                console.log('Completanto registro:');
-                console.log(`Token: ${token.substring(0, 10)}...`);
-            
+            console.log('Completanto registro:');
+            console.log(`Token: ${token.substring(0, 10)}...`);
 
-            // Buscar la invitación por el token
-            /* const invitacion = await Invitacion.findOne({
-                tokenRegistro: token,
-                estadoRegistro: 'pendiente'
-            });
-
-            if (!invitacion) {
-                return res.status(400).json({
+            const preRegistro = await sharePointService.getSupplierByToken(token);
+            if (!preRegistro) {
+                return res.status(404).json({
                     success: false,
-                    msg: "El enlace no es válido"
+                    msg: "Token inválido o expirado"
                 });
-            } */
-
-            // Validar que el NIT no esté registrado
-            /* const nitExistente = await proveedores.findOne({ NIT });
-            if (nitExistente) {
-                return res.status(400).json({
-                    success: false,
-                    msg: "El NIT ya está registrado"
-                })
-            }; */
+            }
 
             // Validar autorizaciones
             const autorizaDatos = AutorizaDatosPersonales === true || AutorizaDatosPersonales === 'true';
@@ -209,32 +196,32 @@ const httpProveedor = {
             }
 
             // Validar documentos si se envio
-            if(req.file) {
-                const ext = path.extname(req.file.originalname).toLowerCase();
-                const isMimeValid = req.file.mimetype === 'application/pdf';
-                const isExtValid = ext === '.pdf';
-                
-                if (!isMimeValid || !isExtValid) {
-                    fs.unlinkSync(req.file.path);
-                    return res.status(400).json({
-                        success: false,
-                        msg: 'El documento debe ser un archivo PDF'
-                    });
-                }
-                console.log(`Documento: ${req.file.originalname}`);
-                
+            if(!req.files || req.files.length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    msg: 'Debes subir al menos un documento'
+                })
+            }
+
+            // Validar cantidad de documentos según el tipo de contribuyente
+            const documentosRequeridos = (TipoContribuyente === 'Persona Natural') ? 3 : 6;
+
+            if (req.files.length < documentosRequeridos) {
+                return res.status(400).json({
+                    success: false,
+                    msg: `Debe subir ${documentosRequeridos} docuementos`
+                });
             }
             
-            // Validar documentos en array si existen
-            if (Documentos && Array.isArray(Documentos) && Documentos.length > 0) {
-                const documentosInvalidos = Documentos.some(doc => !doc || !doc.tipo || !doc.nombre);
-                if (documentosInvalidos) {
-                    if (req.file && fs.existsSync(req.file.path)) {
-                        fs.unlinkSync(req.file.path);
-                    }
+            // Validar que los docuementos sean PDF
+            for (const file of req.files) {
+                if (file.mimetype !== 'application/pdf') {
+                    // Limpiar archivos temporales
+                    req.files.forEach(f => fs.existsSync(f.path) && fs.unlinkSync(f.path));
+
                     return res.status(400).json({
                         success: false,
-                        msg: "Cada documento debe incluir tipo y nombre"
+                        msg: 'Todos los documentos deben ser PDF'
                     });
                 }
             }
@@ -243,50 +230,27 @@ const httpProveedor = {
             console.log(`Razón Social: ${RazonSocial}`);
             
 
-            // Crear el proveedor con el correo que ya está verificado
+            // Construir el objeto del proveedor
             // y mantener el estado como Pre-registro hasta que la empresa lo verifique
             const proveedorCompleto = {
-                NIT,
-                DV,
-                RazonSocial,
-                DireccionNotificacion,
-                Telefono,
-                Ciudad,
-                CorreoElectronico,
-                NombreRepresentante,
-                TipoDocumentoRepresentante,
-                NumeroIdentificacion,
-                TelefonoRepresentante,
-                CorreoElectronicoRepresentante,
-                NombreRepresentanteComercial,
-                CargoRepresentanteComercial,
-                TelefonoRepresentanteComercial,
-                CorreoElectronicoRepresentanteComercial,
-                NombresApellidosResponsable,
-                CargoResponsableFacturacion,
-                CorreoElectronicoResponsable,
-                TipoContribuyente,
-                TipoProveedor,
-                AutorizaDatosPersonales,
-                AutorizaConflictos,
-                Documentos: Documentos || [],
+                ...preRegistro,
+                ...proveedorData,
                 estadoProveedor: 'Pre-registro',
                 fechaRegistroCompleto: new Date().toISOString(),
-                tokenRegistro: token,
-                documentoPrincipal: req.file ? req.file.originalname : null
+                documentosSubidos: req.files.map(f => f.originalname)
             };
 
-            // Actualizar en SharePoint (con o sin archivo)
-            const rutaArchivo = req.file ? req.file.path : null;
-            await sharePointService.registerSupplier(proveedorCompleto, rutaArchivo);
-
+            // Actualizar en SharePoint (usuando NIT como identificador)
+            const rutasArchivo = req.files.map(f => f.path);
+            await sharePointService.saveSupplierData(proveedorCompleto, rutasArchivo);
             console.log('Datos guardados en SharePoint');
-
-            // Limpiar archivo temporal si existe
-            if (req.file && fs.existsSync(req.file.path)) {
-                fs.unlinkSync(req.file.path);
-            }
             
+            // Limpiar archivos temporales
+            req.files.forEach(f => fs.existsSync(f.path) && fs.unlinkSync(f.path));
+
+            // Eliminar carpeta temporal
+            await sharePointService.deleteSupplierFolder(token);
+
             // Enviar correo a la empresa para revisión
             try {
                 await enviarCorreoRevisionEmpresa(proveedorCompleto);
@@ -295,12 +259,13 @@ const httpProveedor = {
                 console.error('Error al notificar a la empresa:', emailError);
             }
             
+            // Respuesta exitosa
             res.status(200).json({
                 success: true,
                 data: {
                     NIT,
                     RazonSocial,
-                    CorreoElectronico,
+                    CorreoElectronico: proveedorCompleto.CorreoElectronico,
                     estadoProveedor: 'Pre-registro'
                 },
                 msg: "Registro completado exitosamente"
@@ -308,85 +273,34 @@ const httpProveedor = {
             
         } catch (error) {
             console.error('Error al completar el registro:', error.message);
-            if (req.file && fs.existsSync(req.file.path)) {
-                fs.unlinkSync(req.file.path);
-            }
-            res.status(500).json({
-                success: false,
-                msg: "Error al completar el registro",
-                error: error.message
+            // limpiar archivos en caso de error
+            if (req.files) req.files.forEach(f => fs.existsSync(f.path) && fs.unlinkSync(f.path));
+            res.status(500).json({ 
+                success: false, 
+                msg: error.message 
             });
         }
     },
 
-    /* // Función para subir documentos a Cloudinary
-    subirDocumento: async (req, res) => {
-    try {
-        if (!req.file) {
-            return res.status(400).json({
-                success: false,
-                msg: "No se recibió ningún archivo"
-            });
-        }
-
-        // Extrae la extensión del archivo original
-        const extension = path.extname(req.file.originalname)
-            .toLowerCase()
-            .replace('.', ''); // "pdf", "docx", "jpg", etc.
-
-        // Nombre limpio sin extensión para Cloudinary
-        const nombreSinExtension = path.basename(req.file.originalname, path.extname(req.file.originalname));
-
-        const resultado = await new Promise((resolve, reject) => {
-            cloudinary.uploader.upload_stream(
-                {
-                    folder: 'proveedores/documentos',
-                    resource_type: 'raw',
-                    type: 'upload',
-                    access_mode: 'public',
-                    format: extension,                          // 👈 fuerza el formato
-                    public_id: `${Date.now()}_${nombreSinExtension}`, // 👈 preserva el nombre
-                },
-                (error, result) => {
-                    if (error) reject(error);
-                    else resolve(result);
-                }
-            ).end(req.file.buffer);
-        });
-
-        const documento = {
-            tipo: req.body.tipo,
-            nombre: req.file.originalname,  // nombre original completo
-            url: resultado.secure_url,
-            formato: extension              // 👈 guarda la extensión
-        };
-
-        res.status(200).json({
-            success: true,
-            data: documento,
-            msg: "Archivo subido exitosamente"
-        });
-
-    } catch (error) {
-        console.error('Error al subir el archivo', error);
-        res.status(500).json({
-            success: false,
-            msg: "Error al subir el archivo"
-        });
-    }
-}, */
-
     // Actualizar datos del proveedor (Admin/Asistente)
     actualizarProveedor: async (req, res) => {
         try {
-            const { id } = req.params;
-            const { datosActualizar } = req.body;
+            const { nit } = req.params;
+            const  datosActualizar  = req.body;
+
+             // Validar que el admin esté autenticado
+            if(req.usuario.rol !== 'admin'){
+                return res.status(403).json({
+                    success: false,
+                    msg: 'No tienes permisos para esta acción'
+                });
+            }
 
             console.log('Actualizando proveedor en SharePoint');
-            console.log(`ID ${id}`)
+            console.log(`NIT ${nit}`)
 
-            /* // Validar que el proveedor exista
-            const proveedorExistente = await proveedores.findById(id);
+            // Validar que el proveedor exista
+            const proveedorExistente = await sharePointService.getSupplierByNit(nit);
             if(!proveedorExistente) {
                 return res.status(404).json({
                     success: false,
@@ -395,8 +309,8 @@ const httpProveedor = {
             }
 
             // Validar que el NIT no esté registrado por otro proveedor
-            if (NIT && NIT !== proveedorExistente.NIT) {
-                const nitExistente = await proveedores.findOne({ NIT, _id: { $ne: id } });
+            if (datosActualizar.NIT && datosActualizar.NIT !== nit) {
+                const nitExistente = await sharePointService.getSupplierByNit(datosActualizar.NIT);
                 if (nitExistente) {
                     return res.status(400).json({
                         success: false,
@@ -406,12 +320,9 @@ const httpProveedor = {
             }
 
             // Validar que el correo no esté registrado por otro proveedor
-            if (CorreoElectronico && CorreoElectronico !== proveedorExistente.CorreoElectronico) {
-                const correoExistente = await proveedores.findOne({ 
-                    CorreoElectronico: CorreoElectronico, 
-                    _id: { $ne: id } 
-                });
-                if (correoExistente) {
+            if (datosActualizar.CorreoElectronico && datosActualizar.CorreoElectronico !== proveedorExistente.CorreoElectronico) {
+                const correoExistente = await sharePointService.getSupplierByEmail(datosActualizar.CorreoElectronico);
+                if (correoExistente && correoExistente.NIT !== nit) {
                     return res.status(400).json({
                         success: false,
                         msg: "El correo ya está registrado por otro proveedor"
@@ -420,50 +331,29 @@ const httpProveedor = {
             }
 
             // Preparar objeto de actualización
-            const datosActualizar = {
-                NIT,
-                DV,
-                RazonSocial,
-                DireccionNotificacion,
-                Telefono,
-                Ciudad,
-                CorreoElectronico,
-                NombreRepresentante,
-                TipoDocumentoRepresentante,
-                NumeroIdentificacion,
-                TelefonoRepresentante,
-                CorreoElectronicoRepresentante,
-                NombreRepresentanteComercial,
-                CargoRepresentanteComercial,
-                TelefonoRepresentanteComercial,
-                CorreoElectronicoRepresentanteComercial,
-                NombresApellidosResponsable,
-                CargoResponsableFacturacion,
-                CorreoElectronicoResponsable,
-                TipoContribuyente,
-                TipoProveedor,
-                estadoProveedor,
-                Documentos
-            };
-            Object.keys(datosActualizar).forEach(key => datosActualizar[key] === undefined && delete datosActualizar[key]);
-            if (estadoProveedor) {
-                datosActualizar.estadoProveedor = estadoProveedor;
+            const updateData = {
+                ...datosActualizar,
+                updateAt: new Date().toISOString()
             }
 
-            // Actualizar el proveedor
-            const proveedorActualizado = await proveedores.findByIdAndUpdate(id, datosActualizar, { new: true });
+            // Actualizar el proveedor en SharePoint
+            await sharePointService.updateSupplier(nit, updateData);
 
-            if (estadoProveedor === 'Registrado') {
+            // Obtener el proveedor actualizado (el NIT pudo haber cambiado)
+            const nuevoNit = datosActualizar.NIT || nit;
+            const proveedorActualizado = await sharePointService.getSupplierByNit(nuevoNit);
+
+            if (updateData.estadoProveedor === 'Registrado') {
                 try {
                     await enviarCorreoAprobacion(proveedorActualizado)
                 } catch (correoError) {
                     console.error('Error al enviar correo de aprobación:', correoError);
                 }
-            } */
+            }
 
             res.status(200).json({
                 success: true,
-                data: datosActualizar,
+                data: proveedorActualizado,
                 msg: "Proveedor actualizado exitosamente"
             });
 
@@ -623,23 +513,23 @@ const httpProveedor = {
 
     aprobarPreRegistro: async (req, res) => {
         try {
-            const { id } = req.params;
+            const { nit } = req.params;
             const { comentario } = req.body;
 
+            // Validar que el admin esté autenticado
+            if(req.usuario.rol !== 'admin'){
+                return res.status(403).json({
+                    success: false,
+                    msg: 'No tienes permisos para esta acción'
+                });
+            }
+
             // Validar que el proveedor exista
-            const proveedor = await proveedores.findById(id);
+            const proveedor = await sharePointService.getSupplierByNit(nit);
             if (!proveedor) {
                 return res.status(404).json({
                     success: false,
                     msg: "Proveedor no encontrado"
-                });
-            }
-
-            // Validar que el admin esté autenticado
-            if (!req.usuario) {
-                return res.status(401).json({
-                    success: false,
-                    msg: "No autenticado"
                 });
             }
 
@@ -651,13 +541,16 @@ const httpProveedor = {
                 });
             }
 
-            // Actualizar el estado del proveedor a "Registrado"
-            const proveedorActualizado = await proveedores.findByIdAndUpdate(id, {
+            // Actualizar el estado del proveedor a "Actualizado"
+            await sharePointService.updateSupplier(nit, {
                 estadoProveedor: "Actualizado",
                 comentarioAprobacion: comentario || null,
                 fechaAprobacion: new Date(),
-                aprobadoPor: req.usuario._id 
-            }, { new: true });
+                aprobadoPor: req.usuario.nombre 
+            });
+
+            // Obtener el proveedor actualizado despúes del cambio
+            const proveedorActualizado = await sharePointService.getSupplierByNit(nit);
 
             // Enviar correo de aprobación al proveedor
             try {
@@ -683,23 +576,23 @@ const httpProveedor = {
 
     rechazarPreRegistro: async (req, res) => {
         try {
-            const { id } = req.params;
+            const { nit } = req.params;
             const { comentario } = req.body;
 
+            // Validar que el admin esté autenticado
+            if(req.usuario.rol !== 'admin'){
+                return res.status(403).json({
+                    success: false,
+                    msg: 'No tienes permisos para esta acción'
+                });
+            }
+
             // Validar que el proveedor exista
-            const proveedor = await proveedores.findById(id);
+            const proveedor = await sharePointService.getSupplierByNit(nit);
             if (!proveedor) {
                 return res.status(404).json({
                     success: false,
                     msg: "Proveedor no encontrado"
-                });
-            }
-
-            // Validar que el admin esté autenticado
-            if (!req.usuario) {
-                return res.status(401).json({
-                    success: false,
-                    msg: "No autenticado"
                 });
             }
 
@@ -712,12 +605,15 @@ const httpProveedor = {
             }
 
             // Actualizar el estado del proveedor a "Inactivo"
-            const proveedorActualizado = await proveedores.findByIdAndUpdate(id, {
+            await sharePointService.updateSupplier(nit, {
                 estadoProveedor: "Inactivo",
                 comentarioAprobacion: comentario || null,
                 fechaAprobacion: new Date(),
-                aprobadoPor: req.usuario._id 
-            }, { new: true });
+                aprobadoPor: req.usuario.name
+            });
+
+            // Obtener el proveedor actualizado despúes del cambio
+            const proveedorActualizado = await sharePointService.getSupplierByNit(nit);
 
             // Enviar correo de aprobación al proveedor
             try {
@@ -743,9 +639,9 @@ const httpProveedor = {
 
     eliminarProveedor: async (req, res) => {
         try {
-            const { id } = req.params;
+            const { nit } = req.params;
 
-            await proveedores.findByIdAndDelete(id);
+            await sharePointService.deleteSupplier(nit);
 
             res.status(200).json({
                 success: true,

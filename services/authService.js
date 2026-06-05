@@ -1,6 +1,3 @@
-console.log('AZURE_CLIENT_ID:', process.env.AZURE_CLIENT_ID ? '✅' : '❌');
-console.log('AZURE_TENANT_ID:', process.env.AZURE_TENANT_ID ? '✅' : '❌');
-console.log('SHAREPOINT_SITE_NAME:', process.env.SHAREPOINT_SITE_NAME);
 import "dotenv/config"
 import axios from "axios"
 

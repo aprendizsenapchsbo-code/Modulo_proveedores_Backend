@@ -8,8 +8,8 @@ const routes = Router();
 routes.post("/login", httpUser.login)
 
 // Rutas protegidas
+routes.post("/", validarJWT, esAdmin, httpUser.createUser)
 routes.get("/", validarJWT, esAdmin, httpUser.getUsers)
-routes.post("/", /* validarJWT, esAdmin, */ httpUser.createUser)
 routes.put("/:email", validarJWT, httpUser.updateUser)
 routes.delete("/:email", validarJWT, esAdmin, httpUser.deleteUser)
 

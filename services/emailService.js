@@ -42,7 +42,7 @@ export const enviarCorreoRegistro = async (CorreoElectronico) => {
             
             <p>Estimado(a),</p>
     
-            <p>Ha sido invitado(a) a realizar su <strong>pre-registro como proveedor</strong> de PCH San Bartolomé.</p>
+            <p>Ha sido invitado(a) a realizar su <strong>pre-registro como proveedor</strong> de PCH San Bartolomé S.A.S E.S.P.</p>
     
             <p style="background-color: #f0f0f0; padding: 15px; border-radius: 5px;">
                 Por favor complete el proceso ingresando al siguiente enlace:<br><br>
@@ -61,7 +61,7 @@ export const enviarCorreoRegistro = async (CorreoElectronico) => {
             <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
             <p style="color: #666; font-size: 12px;">
                 Cordialmente,<br>
-                <strong>PCH San Bartolomé</strong><br>
+                <strong>PCH San Bartolomé S.A.S E.S.P.</strong><br>
                 Departamento de Proveedores
             </p>
             </div>
@@ -184,7 +184,7 @@ export const enviarCorreoAprobacion = async (proveedor) => {
         
                 <p>Estimado(a) <strong>${NombreRepresentante || 'Proveedor'}</strong>,</p>
         
-                <p>Nos complace informarle que su registro como proveedor de <strong>PCH San Bartolomé</strong> ha sido <strong>aprobado exitosamente</strong>.</p>
+                <p>Nos complace informarle que su registro como proveedor de <strong>PCH San Bartolomé S.A.S E.S.P.</strong> ha sido <strong>aprobado exitosamente</strong>.</p>
         
                 <div style="background-color: #d4edda; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #28a745;">
                     <strong style="color: #155724;">Datos de su registro:</strong>
@@ -204,7 +204,7 @@ export const enviarCorreoAprobacion = async (proveedor) => {
                 <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
                 <p style="color: #666; font-size: 12px;">
                     Cordialmente,<br>
-                    <strong>PCH San Bartolomé</strong><br>
+                    <strong>PCH San Bartolomé S.A.S E.S.P.</strong><br>
                     Departamento de Proveedores
                 </p>
                 </div>
@@ -248,7 +248,7 @@ export const enviarCorreoRechazar = async (proveedor) => {
         
                 <p>Estimado(a) <strong>${NombreRepresentante || 'Proveedor'}</strong>,</p>
         
-                <p>Le informamos que, tras la revisión de la información suministrada, su <strong>pre-registro como proveedor de PCH San Bartolomé</strong> no ha sido aprobado en esta ocasión.</p>
+                <p>Le informamos que, tras la revisión de la información suministrada, su <strong>pre-registro como proveedor de PCH San Bartolomé S.A.S E.S.P.</strong> no ha sido aprobado en esta ocasión.</p>
         
                 <div style="background-color: #f8d7da; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #d9534f;">
                     <strong style="color: #721c24;">Motivo del rechazo:</strong>
@@ -271,7 +271,7 @@ export const enviarCorreoRechazar = async (proveedor) => {
                 <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
                 <p style="color: #666; font-size: 12px;">
                     Cordialmente,<br>
-                    <strong>PCH San Bartolomé</strong><br>
+                    <strong>PCH San Bartolomé S.A.S E.S.P.</strong><br>
                     Departamento de Proveedores
                 </p>
                 </div>

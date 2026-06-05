@@ -41,12 +41,12 @@ const httpUser = {
             console.log('Intento de login');
             console.log(`Email: ${email}`);
 
-            // Obtener IDs necesarios
+           /*  // Obtener IDs necesarios
             const siteId = await usersServices.getSiteId();
-            const usersFolderId = await usersServices.getUsersFolderId(siteId);
+            const usersFolderId = await usersServices.getUsersFolderId(siteId); */
 
             // Buscar usuario en SharePoint
-            const usuario = await usersServices.getUserByEmail(siteId, usersFolderId, email);
+            const usuario = await usersServices.getUserByEmail(email);
     
             if (!usuario){
                 console.error('Usuario no encontrado');
@@ -117,10 +117,10 @@ const httpUser = {
         try {
             const {nombre, email, password, rol = 'usuario'} = req.body;
 
-            if (!nombre || !email || !password || !rol) {
+            if (!nombre || !email || !password) {
                 return res.status(400).json({
                     success: false,
-                    msg: "nombre, email, password y rol son obligatorios"
+                    msg: "Faltan datos"
                 });
             }
 
@@ -146,7 +146,7 @@ const httpUser = {
             console.log(`Nombre: ${nombre}`);
             console.log(`Rol: ${rol}`);
             
-            // Obtener IDs necesarios
+            /* // Obtener IDs necesarios
             const siteId = await usersServices.getSiteId();
             const rootFolderId = await usersServices.getRootFolderId(siteId);
             const usersFolderId = await usersServices.getOrCreateUsersFolder(siteId, rootFolderId);
@@ -155,10 +155,10 @@ const httpUser = {
             await usersServices.listarCarpetas(siteId);
 
             console.log('Carpetas dentro de API Documentos Proveedores Prueba:');
-            await usersServices.listarCarpetas(siteId, rootFolderId);
+            await usersServices.listarCarpetas(siteId, rootFolderId); */
             
             // Verificar que el email no exista
-            const existe = await usersServices.emailExiste(siteId, rootFolderId, email);
+            const existe = await usersServices.getUserByEmail(email);
             if (existe) {
                 return res.status(400).json({
                     success: false,
@@ -181,7 +181,7 @@ const httpUser = {
             };
 
             // Guardar en SharePoint
-            await usersServices.createUser(siteId, usersFolderId, usuarioData);
+            await usersServices.createUser(usuarioData);
 
             console.log('Usuario creado exitosamente');
 
@@ -218,18 +218,15 @@ const httpUser = {
                 });
             }
 
-            // Obtener IDs necesarios
+            /* // Obtener IDs necesarios
             const siteId = await usersServices.getSiteId();
-            const usersFolderId = await usersServices.getUsersFolderId(siteId);
+            const usersFolderId = await usersServices.getUsersFolderId(siteId); */
 
             // Obtener usuarios
-            const usuarios = await usersServices.getAllUsers(siteId, usersFolderId);
+            const usuarios = await usersServices.getAllUsers();
 
             // Remover passwordHash de cada usuario
-            const usuariosSinPassword = usuarios.map(u => {
-                const { passwordHash, ...rest } = u;
-                return rest;
-            });
+            const usuariosSinPassword = usuarios.map(({ passwordHash, ...rest }) => rest);
 
             console.log(`${usuariosSinPassword.length} usuarios encontrados`);
 
@@ -256,38 +253,45 @@ const httpUser = {
         try {
             // El ID puede ser el mismo email del usuario
             const { email } = req.params;
+
+            // Verificar que el usuario sea admin
+            if(req.usuario.rol !== 'admin' && req.usuario.email !== email){
+                return res.status(403).json({
+                    success: false,
+                    msg: 'No tienes permisos para esta acción'
+                });
+            }
+
             const datosActualizar = req.body;
 
             console.log('Actualizando usuario:');
             console.log(`Email: ${email}`);
 
-            // Obtener IDs necesarios
+            /* // Obtener IDs necesarios
             const siteId = await usersServices.getSiteId();
-            const usersFolderId = await usersServices.getUsersFolderId(siteId);
+            const usersFolderId = await usersServices.getUsersFolderId(siteId); */
 
-            const usuarioSolicitante = req.usuario;
+            /* const usuarioSolicitante = req.usuario;
             if (usuarioSolicitante.rol !== 'admin' && usuarioSolicitante.email !== email) {
                 return res.status(403).json({
                     success: false,
                     msg: 'No tienes permiso para actualizar este usuario'
                 });
-            }
+            } */
 
             // Actualizar usuario
-            const usuarioActualizado = await usersServices.actualizarUsuario(
-                siteId,
-                usersFolderId,
+            const usuarioActualizado = await usersServices.updateUser(
                 email,
                 datosActualizar
             );
 
             // Remover passwordHash
-            const { passwordHash, ...usuarioSinPassword } = usuarioActualizado;
+            const { passwordHash, ...rest } = usuarioActualizado;
             console.log('Usuario actualizado')
 
             res.status(200).json({
                 success: true,
-                data: usuarioSinPassword,
+                data: rest,
                 msg: "Usuario actualizado correctamente",
             });
             
@@ -316,12 +320,12 @@ const httpUser = {
             console.log('Eliminando usuario');
             console.log(`Email: ${email}`)
 
-            // Obtener IDs necesarios
+            /* // Obtener IDs necesarios
             const siteId = await usersServices.getSiteId();
-            const usersFolderId = await usersServices.getUsersFolderId(siteId);
+            const usersFolderId = await usersServices.getUsersFolderId(siteId); */
 
             // Eliminar usuario
-            await usersServices.deleteUser(siteId, usersFolderId, email);
+            await usersServices.deleteUser(email);
 
             console.log('Usuario eliminado')
 

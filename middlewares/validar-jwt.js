@@ -40,10 +40,10 @@ export const validarJWT = async (req, res, next) => {
         const payload = jwt.verify(token, process.env.JWT_SECRET || 'clavesupersegura');
 
         // Buscar usuario en SharePoint por email
-        const siteId = await usersServices.getSiteId();
+        /* const siteId = await usersServices.getSiteId();
         const rootFolderId = await usersServices.getRootFolderId(siteId);
-        const usersFolderId = await usersServices.getOrCreateUsersFolder(siteId, rootFolderId);
-        const usuario = await usersServices.getUserByEmail(siteId, usersFolderId, payload.email);
+        const usersFolderId = await usersServices.getOrCreateUsersFolder(siteId, rootFolderId); */
+        const usuario = await usersServices.getUserByEmail(payload.email);
 
         if (!usuario) {
             return res.status(401).json({
@@ -66,7 +66,7 @@ export const validarJWT = async (req, res, next) => {
 
 // Middleware para verificar rol de admin
 export const esAdmin = (req, res, next) => {
-    if (req.usuario && req.usuario.rol === 'admin') {
+    if (req.usuario?.rol === 'admin') {
         next();
     } else {
         res.status(403).json({

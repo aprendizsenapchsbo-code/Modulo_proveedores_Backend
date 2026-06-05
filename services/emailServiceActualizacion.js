@@ -39,7 +39,7 @@ export const enviarCorreoActualizacion = async (CorreoElectronico, idProveedor =
         
                 <p>Estimado(a) Proveedor,</p>
         
-                <p>Cordialmente le solicitamos que actualice la información de su registro como proveedor de <strong>PCH San Bartolomé</strong>.</p>
+                <p>Cordialmente le solicitamos que actualice la información de su registro como proveedor de <strong>PCH San Bartolomé S.A.S E.S.P</strong>.</p>
         
                 <p style="background-color: #f0f0f0; padding: 15px; border-radius: 5px;">
                     Por favor ingrese al siguiente enlace para actualizar sus datos:<br><br>

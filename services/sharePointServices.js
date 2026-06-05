@@ -2,6 +2,7 @@ import axios from "axios";
 import fs from 'fs'
 import path from "path";
 import authService from "./authService.js";
+import { error } from "console";
 
 /* Servicio para gestionar documentos en el SharePoint, se encarga de crear carpetas y de subir los documentos */
 
@@ -9,13 +10,21 @@ class SharePointService {
     constructor() {
         this.graphApiUrl = process.env.MICROSOFT_GRAPH_API;
         this.siteName = process.env.SHAREPOINT_SITE_NAME;
-        this.rootFolder = process.env.SHAREPOINT_DOCUMENTOS_FOLDER; // Carpeta raiz
+        this.driveId = process.env.SHAREPOINT_ID_SIG;
+        this.basePath = process.env.SHAREPOINT_DOCUMENTOS_FOLDER; // Carpeta raiz
         this.suppliersFolder = 'Proveedores' // Subcarpeta para proveedores
     }
 
+    // Codificar cada segmento de la ruta para evitar problemas con caracteres especiales
+    encodedPath(path) {
+        return path.split('/').map(segment => encodeURIComponent(segment)).join('/');
+    }
+
+    // ----------------SITIO Y DRIVE----------------
     // Obtiene el ID del sitio de SharePoint por su nombre
     async getSiteId() {
         try {
+            if (this.siteId) return this.siteId;
             const token = await authService.getAccessToken();
             
             const response = await axios.get(
@@ -33,6 +42,7 @@ class SharePointService {
             }
             
             const siteId = response.data.value[0].id;
+            this.siteId = siteId;
             console.log(`Id del sitio obtenido ${siteId}`);
             return siteId;
             
@@ -41,56 +51,100 @@ class SharePointService {
             throw error;
         }
     }
-    
-    // Obtener el ID de la carpeta raiz "API Documentos Proveedores Prueba"
-    async getRootFolderId(siteId) {
+
+    // Obtener el ID del drive (biblioteca SIG)
+    async getDriveId( driveName = 'SIG' ) {
         try {
+            if (this.driveId) return this.driveId;
+            const siteId = await this.getSiteId();
             const token = await authService.getAccessToken();
-            
-            // 1. Buscar primero el id de la primera carpeta
-            const firstFolderResponse = await axios.get(
-                `${this.graphApiUrl}/sites/${siteId}/drive/root/children?$filter=name eq '${process.env.SHAREPOINT_FIRST_FOLDER}'`,
-                {
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    }
+            const url = `${this.graphApiUrl}/sites/${siteId}/drives`;
+
+            const response = await axios.get(url, {
+                headers: {
+                    Authorization: `Bearer ${token}`,
                 }
-            );
+            });
 
-            const folder1Id = firstFolderResponse.data.value[0].id;
-            
-            // 2. Buscar el id de la segunda carpeta
-            const secondFolderResponse = await axios.get(
-                `${this.graphApiUrl}/sites/${siteId}/drive/items/${folder1Id}/children?$filter=name eq '${process.env.SHAREPOINT_SECOND_FOLDER}'`,
-                {
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    }
+            const drive = response.data.value.find(d => d.name === driveName);
+            if (!drive) {
+                throw new Error(`Biblioteca "${driveName}" no encontrada`);
+            }
+            this.driveId = drive.id;
+            console.log(`ID del drive obtenido: ${this.driveId}`);
+            return this.driveId;
+
+        } catch (error) {
+            console.error('Error al obtener el ID del drive:', error.message);
+            throw error;
+        }
+    }
+
+    // --------------CARPETAS-------------------
+
+    // Crear carpetas anidadas: API Documentos Proveedores Prueba > Proveedores
+    async ensureFolder(folderPath) {
+        try {
+            const siteId = await this.getSiteId();
+            const driveId = await this.getDriveId();
+            const token = await authService.getAccessToken();
+            const parts = folderPath.split('/');
+            let current = '';
+
+            for (const part of parts){
+                current = current ? `${current}/${part}` : part;
+                const encoded = this.encodedPath(current)
+                const folderUrl = `${this.graphApiUrl}/sites/${siteId}/drives/${driveId}/root:/${encoded}`;
+                try {
+                    await axios.get(folderUrl, {
+                        headers: {
+                            Authorization: `Bearer ${token}`
+                        }
+                    });
+                } catch (err) {
+                    if (err.response && err.response.status === 404) {
+                        // Crear la carpeta
+                        await axios.patch(folderUrl, {
+                            name: part,
+                            folder: {},
+                            '@microsoft.graph.conflictBehavior': 'fail'
+                        }, {
+                            headers: {
+                                Authorization: `Bearer ${token}`,
+                                'Content-Type': 'application/json'
+                            }
+                        });
+                        console.log(`Carpeta creada: ${current}`);
+                    } else throw err;
                 }
-            );
-
-            const folder2Id = secondFolderResponse.data.value[0].id;
-
-            // 3. Buscar API Documentos Proveedores Prueba
-            const rootResponse = await axios.get(
-                `${this.graphApiUrl}/sites/${siteId}/drive/items/${folder2Id}/children?$filter=name eq '${this.rootFolder}'`,
-                {
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    }
-                }
-            );
-
-            if (!rootResponse.data.value || rootResponse.data.value.length === 0) {
-                throw new Error(`No se encontró la carpeta: ${this.rootFolder}`);
             }
 
-            const rootFolderId = rootResponse.data.value[0].id;
-            console.log('Carpeta raiz encontrada');
-            return rootFolderId;
+        } catch (error) {
+            console.error('Error al crear carpeta en SharePoint:', error.message);
+            throw error;
+        }
+    }
+    
+    // Obtener el ID de la carpeta
+    async getFolderId(folderPath) {
+        try {
+            const siteId = await this.getSiteId();
+            const driveId = await this.getDriveId();
+            const token = await authService.getAccessToken();
+            
+            const encoded = this.encodedPath(folderPath);
+            const url = `${this.graphApiUrl}/sites/${siteId}/drives/${driveId}/root:/${encoded}`;
+
+            const response = await axios.get(url, {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            });
+
+            if (!response) {
+                throw new Error(`No se encontró la carpeta: ${folderPath}`);
+            }
+            return response.data.id;;
             
         } catch (error) {
             console.error('Error al obtener el ID de la carpeta raiz:', error.message);
@@ -98,72 +152,111 @@ class SharePointService {
         }
     }
 
+    // ------------------PROVEEDORES------------------
     // Obtener el ID de la subcarpeta "Proveedores"
-    async getSuppliersFolderId(siteId, rootFolderId) {
-        try {
-            const token = await authService.getAccessToken();
-            const response = await axios.get(
-                `${this.graphApiUrl}/sites/${siteId}/drive/items/${rootFolderId}/children?$filter=name eq '${this.suppliersFolder}'`,
-                {
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    }
-                }
-            );
+    getSupplierFolderPath(identifier) {
+        const sanitized = identifier.replace(/[^a-zA-Z0-9]/g, '_');
+        return `${this.basePath}/${this.suppliersFolder}/Proveedor_${sanitized}`;
+    }
 
-            if (!response.data.value || response.data.value.length === 0) {
-                throw new Error(`No se encontró la carpeta raiz: ${this.rootFolder}`);
-            }
-            
-            const suppliersFolderId = response.data.value[0].id;
-            console.log('Carpeta de proveedores encontrada');
-            return suppliersFolderId;
-
-        } catch (error) {
-            console.error('Error al obtener la carpeta de proveedores:', error.message);
-            throw error;
-        }
+    getSupplierJsonPath(identifier) {
+        return `${this.getSupplierFolderPath(identifier)}/datos_proveedor.json`;
     }
     
     // Leer el archivo JSON de metadata dentro de una carpeta de proveedor
-    async getSupplierMetadata(siteId, folderId) {
-        try {
-            const token = await authService.getAccessToken();
-            const response = await axios.get(
-                `${this.graphApiUrl}/sites/${siteId}/drive/items/${folderId}:/datos_proveedor.json:/content`,
-                {
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    }
-                }
-            );
-            return response.data;
+    async saveSupplierData(supplierData, filePaths = null) {
+        // Usar NIT como identificador principal, o token si es pre-registro
+        let identifier = supplierData.NIT || supplierData.tokenRegistro;
 
-        } catch (error) {
-            console.error('Error al leer metadata del proveedor', error.message);
-            return null;
+        if (!identifier) {
+            identifier = supplierData.RazonSocial || supplierData.nombre || 'Proveedor';
         }
+
+        const folderPath = this.getSupplierFolderPath(identifier);
+        await this.ensureFolder(folderPath);
+
+        const siteId = await this.getSiteId();
+        const driveId = await this.getDriveId();
+        const token = await authService.getAccessToken();
+
+        // Guardamdo el JSON
+        const jsonPath = `${folderPath}/datos_proveedor.json`;
+        const encodedJson = this.encodedPath(jsonPath);
+        const jsonUrl = `${this.graphApiUrl}/sites/${siteId}/drives/${driveId}/root:/${encodedJson}:/content`;
+
+        await axios.put(jsonUrl, JSON.stringify(supplierData, null, 2), {
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        // Subir multiples documentos
+        if (filePaths && Array.isArray(filePaths) && filePaths.length > 0) {
+            for (const filePath of filePaths) {
+                if (fs.existsSync(filePath)) {
+                    const fileName = path.basename(filePath);
+                    const filePathUrl = `${folderPath}/${fileName}`;
+                    const encodedFile = this.encodedPath(filePathUrl);
+                    const fileUrl = `${this.graphApiUrl}/sites/${siteId}/drives/${driveId}/root:/${encodedFile}:/content`;
+                    const fileContent = fs.readFileSync(filePath);
+
+                    await axios.put(fileUrl, fileContent, {
+                        headers: {
+                            Authorization: `Bearer ${token}`,
+                            'Content-Type': 'application/octet-stream'
+                        }
+                    });
+                    console.log(`Documento subido ${fileName}`)
+                }
+            }
+        }
+        return { succes: true, folderPath };
     }
 
     // Obtener todos los proveedores (recorre todas las carpetas y lee los JSON)
     async getAllSuppliers() {
         try {
+            const supplierBase = `${this.basePath}/${this.suppliersFolder}`;
             const siteId = await this.getSiteId();
-            const documentsFolderId = await this.getDocumentsFolderId(siteId);
-            const folders = await this.getAllSupplierFolders(siteId, documentsFolderId);
+            const driveId = await this.getDriveId();
+            const token = await authService.getAccessToken();
+
+            const folderId = await this.getFolderId(supplierBase);
+            const childrenUrl = `${this.graphApiUrl}/sites/${siteId}/drives/${driveId}/items/${folderId}/children`;
+
+            const response = await axios.get(childrenUrl, {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            });
             
-            const supplier = [];
-            for (const folder of folders) {
-                const metadata = await this.getSupplierMetadata(siteId, folder.id);
-                if (metadata) {
-                    metadata_.sharePointFolderId = folder.id;
-                    metadata_.sharePointFolderName = folder.name;
-                    supplier.push(metadata);
+            const proveedores = [];
+            for (const item of response.data.value) {
+                if (item.folder) {
+                    const jsonPath = `${supplierBase}/${item.name}/datos_proveedor.json`;
+                    try {
+                        const encodedJson = this.encodedPath(jsonPath);
+                        const jsonUrl = `${this.graphApiUrl}/sites/${siteId}/drives/${driveId}/root:/${encodedJson}`;
+
+                        const contentRes = await axios.get(`${jsonUrl}:/content`, {
+                            headers: {
+                                Authorization: `Bearer ${token}`
+                            }
+                        });
+                        console.log('Proveedor encontrado:'), {
+                            CorreoElectronico: contentRes.data.CorreoElectronico,
+                            tokenRegistro: contentRes.data.tokenRegistro,
+                            NIT: contentRes.data.NIT
+                        }
+
+                        proveedores.push(contentRes.data);
+                    } catch (err) {
+                        console.warn(`No se pudo leer JSON en ${item.name}:`, err.message);
+                    }
                 }
             }
-            return supplier
+            return proveedores;
             
         } catch (error) {
             console.error('Error al obtener todos los proveedores:', error.message);
@@ -174,20 +267,28 @@ class SharePointService {
     // Obtener un proveedor por su NIT (buscando la carpeta que coincida)
     async getSupplierByNit(nit) {
         try {
+            const folderPath = this.getSupplierFolderPath(nit);
+            const jsonPath = `${folderPath}/datos_proveedor.json`;
             const siteId = await this.getSiteId();
-            const documentsFolderId = await this.getDocumentsFolderId(siteId);
-            const folders = await this.getAllSupplierFolders(siteId, documentsFolderId);
+            const driveId = await this.getDriveId();
+            const token = await authService.getAccessToken();
+            const encoded = await this.encodedPath(jsonPath);
+            const url = `${this.graphApiUrl}/sites/${siteId}/drives/${driveId}/root:/${encoded}`;
 
-            // Construir el nombre
-            const folderName = `Proveedor_${nit.replace(/[^a-zA-Z0-9]/g, '_')}`;
-            const targetFolder = folders.find(f => f.name === folderName);
+            try {
+                const contentRes = await axios.get(`${url}:/content`, {
+                    headers: {
+                        Authorization: `Bearer ${token}`
+                    }
+                });
 
-            if (!targetFolder) {
-                return null;
+                return contentRes.data;
+            } catch (err) {
+                if (err.response?.status === 404) {
+                    return null;
+                }
+                throw err;
             }
-
-            const metadata = await this.getSupplierMetadata(siteId, targetFolder.id);
-            return metadata;
 
         } catch (error) {
             console.error('Error al obtener el proveedor por su NIT:', error.message);
@@ -225,167 +326,91 @@ class SharePointService {
     } */
 
     // Verificar que la carpeta del proveedor ya exista
-    async getSupplierFolder(siteId, documentsFolderId, supplierIdentifier) {
-        try {
-            const token = await authService.getAccessToken();
-            const folderName = `Proveedor_${supplierIdentifier.replace(/[^a-zA-Z0-9]/g, '_')}`;
+    async getSupplierByToken(token) {
+        console.log(`Buscando token: ${token}`)
+        const all = await this.getAllSuppliers();
+        console.log('Proveedores encontrados:', all.length);
 
-            const response = await axios.get(
-                `${this.graphApiUrl}/sites/${siteId}/drive/items/${documentsFolderId}/children?$filter=name eq '${folderName}'`,
-                {
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    }
-                }
-            );
-
-            if (response.data.value && response.data.value.length > 0) {
-                return response.data.value[0].id;
-            }
-
-            return null;
-
-        } catch (error) {
-            console.error('Error al buscar carpeta del proveedor', error.message);
-            return null;
+        const found = all.find(s => {
+            console.log(`Comparando con: ${s.tokenRegistro}`)
+            return s.tokenRegistro === token
+        });
+        if (!found) {
+            console.log('Token no encontrado entre todos los proveedores');
+        } else {
+            console.log('Token encontrado');
         }
+        return found;
     }
 
-    // Crea nombre de carpeta para el proveedor si no existe
-    async createSupplierFolder(siteId, suppliersFolderId, supplierName) {
-        try {
-            const token = await authService.getAccessToken();
+    async getSupplierByEmail(email) {
+        const normalizedEmail = email.toLowerCase();
+        console.log(`Buscando email: ${normalizedEmail}`)
+        const all = await this.getAllSuppliers();
+        console.log('Proveedores encontrados:', all.length);
 
-            // Crear nombre de carpeta seguro (sin caracteres espaciales)
-            const folderName = `Proveedor_${supplierName.replace(/[^a-zA-Z0-9]/g, '_')}`;
-
-            // Verificar si ya existe
-            const existingFolderId = await this.getSupplierFolder(siteId, suppliersFolderId, supplierName);
-            if (existingFolderId) {
-                console.log(`La carpeta del proveedor ya existe ${folderName}`);
-                return existingFolderId;
-            }
-
-            const response = await axios.post(
-                `${this.graphApiUrl}/sites/${siteId}/drive/items/${suppliersFolderId}/children`,
-                {
-                    name: folderName,
-                    folder: {},
-                    '@microsoft.graph.conflictBehavior': 'rename'
-                },
-                {
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    }
-                }
-            );
-
-            const supplierFolderId = response.data.id;
-            console.log(`Carpeta del proveedor creada: ${folderName}`);
-            return supplierFolderId;
-
-        } catch (error) {
-            console.error('Error al crear la carpeta del proveedor:', error.message);
-            throw error;
+        const found = all.find(e =>  e.CorreoElectronico?.toLowerCase() === normalizedEmail );
+        if (!found) {
+            console.log('Email no encontrado entre todos los proveedores');
+        } else {
+            console.log('Email encontrado');
         }
+        return found;
     }
 
-    // Subir un archivo a la carpeta del proveedor
-    async uploadDocument(siteId, supplierFolderId, filePath, fileName) {
+    async updateSupplier(nit, updateData, documentPath = null) {
         try {
-            const token = await authService.getAccessToken();
-
-            // Leer el archivo
-            const fileContent = fs.readFileSync(filePath);
-
-            const response = await axios.put(
-                `${this.graphApiUrl}/sites/${siteId}/drive/items/${supplierFolderId}:/${fileName}:/content`,
-                fileContent,
-                {
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                        'Content-Type': 'application/octet-stream'
-                    }
-                }
-            );
-
-            console.log(`Archivo subido: ${fileName}`);
-            return response.data;
-            
-        } catch (error) {
-            console.error('Error al subir el documento:', error.message);
+            const existing = await this.getSupplierByNit(nit);
+    
+            if (!existing) {
+                throw new Error(`Proveedor con NIT ${nit} no encontrado`);
+            }
+    
+            const merged = { ...existing, ...updateData, updateAt: new Date().toISOString() };
+            return await this.saveSupplierData(merged, documentPath);
+        } catch {
+            console.error('Error no se pudo actualizar el proveedor:', error.message)
             throw error
         }
     }
 
-    // Guardar los datos del proveedor como archivo JSON en SharePoint
-    async uploadSupplierMetadata(siteId, supplierFolderId, supplierData) {
+    async deleteSupplier(nit) {
         try {
+            const folderPath = this.getSupplierFolderPath(nit);
+            const siteId = await this.getSiteId();
+            const driveId = await this.getDriveId();
             const token = await authService.getAccessToken();
+            const encoded = await this.encodedPath(folderPath)
+            const url = `${this.graphApiUrl}/sites/${siteId}/drives/${driveId}/root:/${encoded}`;
 
-            // Crear contenido JSON con los datos del proveedor
-            const jsonContent = JSON.stringify(supplierData, null, 2);
-
-            const response = await axios.put(
-                `${this.graphApiUrl}/sites/${siteId}/drive/items/${supplierFolderId}:/datos_proveedor.json:/content`,
-                jsonContent,
-                {
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    }
+            await axios.delete(url, {
+                headers: {
+                    Authorization: `Bearer ${token}`
                 }
-            );
+            });
 
-            console.log('Datos del proveedor guardados');
-            return response.data;
-            
+            console.log(`Proveedor eliminado: ${nit}`)
         } catch (error) {
-            console.error('Error al guardar datos del proveedor:', error.message);
+            console.log('Error al eliminar el proveedor:', error.message);
             throw error;
         }
     }
 
-    //Funcion Principal: Registra un proveedor completo.
-    //Crea carpeta, sube documento y guarda datos
-    async registerSupplier(supplierData, documentPath) {
-        try {
-            console.log('Iniciando registro de proveedor en SharePoint...');
+    async deleteSupplierFolder(identifier) {
+        const folderPath = this.getSupplierFolderPath(identifier);
+        const siteId = await this.getSiteId();
+        const driveId = await this.getDriveId();
+        const token = await authService.getAccessToken();
+        const encoded = this.encodedPath(folderPath);
+        const url = `${this.graphApiUrl}/sites/${siteId}/drives/${driveId}/root:/${encoded}`;
 
-            // Paso 1: Obtener IDs necesarios
-            const siteId = await this.getSiteId();
-            const rootFolderId = await this.getRootFolderId(siteId);
-            const suppliersFolderId = await this.getSuppliersFolderId(siteId, rootFolderId);
-
-            // Paso 2: Crear carpeta del proveedor
-            const supplierFolderId = await this.createSupplierFolder(
-                siteId,
-                suppliersFolderId,
-                supplierData.RazonSocial || supplierData.nombre || 'Proveedor'
-            );
-
-            // Paso 3: Subir documentos
-            const fileName = path.basename(documentPath);
-            await this.uploadDocument(siteId, supplierFolderId, documentPath, fileName);
-
-            // Paso 4: Guardar datos del proveedor como JSON
-            await this.uploadSupplierMetadata(siteId, supplierFolderId, supplierData);
-
-            console.log('Proveedor registrado exitosamente en SharePoint');
-            
-            return {
-                success: true,
-                message: 'Proveedor registrado exitosamente',
-                supplierFolder: supplierFolderId,
-                siteId: siteId
-            };
-        } catch (error) {
-            console.error('Error al registrar el proveedor:', error.message);
-            throw error;
-        }
+        await axios.delete(url, {
+            headers: {
+                Authorization: `Bearer ${token}`
+            }
+        });
+        console.log(`Carpeta eliminada: ${folderPath}`);
     }
 }
 
-export default new SharePointService()
+export default new SharePointService();
