@@ -1,6 +1,6 @@
 // app.js
-console.log('AZURE_CLIENT_ID:', process.env.AZURE_CLIENT_ID ? '✅' : '❌');
-console.log('AZURE_TENANT_ID:', process.env.AZURE_TENANT_ID ? '✅' : '❌');
+console.log('AZURE_CLIENT_ID:', process.env.CLIENT_ID ? '✅' : '❌');
+console.log('AZURE_TENANT_ID:', process.env.TENANT_ID ? '✅' : '❌');
 console.log('SHAREPOINT_SITE_NAME:', process.env.SHAREPOINT_SITE_NAME);
 
 import "dotenv/config"
@@ -16,7 +16,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cors({ 
-  origin: /* process.env.FRONTEND_URL_PRODUCCION || */ 'http://localhost:5173',
+  origin: process.env.FRONTEND_URL_PRODUCCION || 'http://localhost:5173',
   credentials: true
 }));
 
@@ -71,7 +71,7 @@ app.listen(PORT, () => {
   console.log('='.repeat(50));
   console.log(`Puerto ${PORT}`);
   console.log(`Base de datos SharePoint`)
-  console.log(`CORS: ${/* process.env.FRONTEND_URL_PRODUCCION || */ process.env.URL_PRUEBAS}`);
+  console.log(`CORS: ${process.env.FRONTEND_URL_PRODUCCION || process.env.URL_PRUEBAS}`);
   
 });
 
