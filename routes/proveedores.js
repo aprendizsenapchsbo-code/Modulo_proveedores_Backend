@@ -7,20 +7,20 @@ const routes = Router();
 
 // Rutas Get
 routes.get("/", validarJWT, esAdmin, httpProveedor.getProveedores)
-routes.get("/:nit", validarJWT, esAdmin, httpProveedor.getProveedorId)
+routes.get("/:razonSocial", validarJWT, esAdmin, httpProveedor.getProveedorId)
 
 // Rutas Post
 routes.post("/registro", validarJWT, esAdmin, httpProveedor.registroProveedor)
 routes.post("/registro/completar/:token", upload.array('documentos', 10), httpProveedor.completarRegistro)
-routes.post("/aprobar/pre-registro/:nit", validarJWT, esAdmin, httpProveedor.aprobarPreRegistro)
-routes.post("/rechazar/pre-registro/:nit", validarJWT, esAdmin, httpProveedor.rechazarPreRegistro)
+routes.post("/aprobar/pre-registro/:razonSocial", validarJWT, esAdmin, httpProveedor.aprobarPreRegistro)
+routes.post("/rechazar/pre-registro/:razonSocial", validarJWT, esAdmin, httpProveedor.rechazarPreRegistro)
 
 // Rutas Put
-routes.put("/:nit/solicitar-actualizacion", validarJWT, esAdmin, httpProveedor.solicitarActualizacion)
-routes.put("/:nit/actualizar-datos", upload.single('documento'), httpProveedor.actualizarDatosProveedor)
-routes.put("/:nit", validarJWT, esAdmin, httpProveedor.actualizarProveedor)
+routes.put("/:razonSocial/solicitar-actualizacion", validarJWT, esAdmin, httpProveedor.solicitarActualizacion)
+routes.put("/:token/actualizar-datos", upload.array('documentos', 10), httpProveedor.actualizarDatosProveedor)
+routes.put("/:RazonSocial", validarJWT, esAdmin, httpProveedor.actualizarProveedor)
 
 // Rutas Delete
-routes.delete("/:nit", validarJWT, esAdmin, httpProveedor.eliminarProveedor)
+routes.delete("/:razonSocial", validarJWT, esAdmin, httpProveedor.eliminarProveedor)
 
 export default routes; 

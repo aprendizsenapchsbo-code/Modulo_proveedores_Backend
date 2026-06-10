@@ -34,10 +34,10 @@ const httpProveedor = {
 
     getProveedorId: async (req, res) => {
         try {
-            const { nit } = req.params; // Se espera que el id sea el NIT
-            console.log('Proveedor encontrado: ', nit)
+            const { razonSocial } = req.params; // Se espera que el id sea el la Razón Social
+            console.log('Proveedor encontrado: ', razonSocial)
 
-            const proveedor = await sharePointService.getSupplierByNit(nit);
+            const proveedor = await sharePointService.getSupplierByRazonSocial(razonSocial);
             if (!proveedor) {
                 return res.status(404).json({
                     success: false,
@@ -285,10 +285,10 @@ const httpProveedor = {
     // Actualizar datos del proveedor (Admin/Asistente)
     actualizarProveedor: async (req, res) => {
         try {
-            const { nit } = req.params;
+            const { RazonSocial } = req.params;
             const  datosActualizar  = req.body;
 
-             // Validar que el admin esté autenticado
+            // Validar que el admin esté autenticado
             if(req.usuario.rol !== 'admin'){
                 return res.status(403).json({
                     success: false,
@@ -297,10 +297,10 @@ const httpProveedor = {
             }
 
             console.log('Actualizando proveedor en SharePoint');
-            console.log(`NIT ${nit}`)
+            console.log(`Razón Social ${RazonSocial}`)
 
             // Validar que el proveedor exista
-            const proveedorExistente = await sharePointService.getSupplierByNit(nit);
+            const proveedorExistente = await sharePointService.getSupplierByRazonSocial(RazonSocial);
             if(!proveedorExistente) {
                 return res.status(404).json({
                     success: false,
@@ -308,13 +308,13 @@ const httpProveedor = {
                 });
             }
 
-            // Validar que el NIT no esté registrado por otro proveedor
-            if (datosActualizar.NIT && datosActualizar.NIT !== nit) {
-                const nitExistente = await sharePointService.getSupplierByNit(datosActualizar.NIT);
+            // Validar que la RazonSocial no esté registrado por otro proveedor
+            if (datosActualizar.RazonSocial && datosActualizar.RazonSocial !== RazonSocial) {
+                const nitExistente = await sharePointService.getSupplierByRazonSocial(datosActualizar.RazonSocial);
                 if (nitExistente) {
                     return res.status(400).json({
                         success: false,
-                        msg: "El NIT ya está registrado por otro proveedor"
+                        msg: "La Razón Social ya está registrada por otro proveedor"
                     });
                 }
             }
@@ -322,7 +322,7 @@ const httpProveedor = {
             // Validar que el correo no esté registrado por otro proveedor
             if (datosActualizar.CorreoElectronico && datosActualizar.CorreoElectronico !== proveedorExistente.CorreoElectronico) {
                 const correoExistente = await sharePointService.getSupplierByEmail(datosActualizar.CorreoElectronico);
-                if (correoExistente && correoExistente.NIT !== nit) {
+                if (correoExistente && correoExistente.RazonSocial !== razonSocial) {
                     return res.status(400).json({
                         success: false,
                         msg: "El correo ya está registrado por otro proveedor"
@@ -337,11 +337,11 @@ const httpProveedor = {
             }
 
             // Actualizar el proveedor en SharePoint
-            await sharePointService.updateSupplier(nit, updateData);
+            await sharePointService.updateSupplier(RazonSocial, updateData);
 
             // Obtener el proveedor actualizado (el NIT pudo haber cambiado)
-            const nuevoNit = datosActualizar.NIT || nit;
-            const proveedorActualizado = await sharePointService.getSupplierByNit(nuevoNit);
+            const nuevoNit = datosActualizar.RazonSocial || RazonSocial;
+            const proveedorActualizado = await sharePointService.getSupplierByRazonSocial(nuevoNit);
 
             if (updateData.estadoProveedor === 'Registrado') {
                 try {
@@ -369,11 +369,21 @@ const httpProveedor = {
     // Actualizar datos del proveedor (El proveedor se actualiza a sí mismo desde el formulario)
     actualizarDatosProveedor: async (req, res) => {
         try {
-            const { id } = req.params;
+            const { token } = req.params;
+            const proveedorData = req.body;
+
+            // Buscar proveedor por token de actualización
+            const proveedor = await sharePointService.getSupplierByUpdateToken(token);
+            if (!proveedor) {
+                return res.status(404).json({
+                    success: false,
+                    msg: "Enlace inválido o expirado"
+                });
+            }
+
             const {
                 NIT,
                 DV,
-                RazonSocial,
                 DireccionNotificacion,
                 Telefono,
                 Ciudad,
@@ -392,36 +402,35 @@ const httpProveedor = {
                 CorreoElectronicoResponsable,
                 TipoContribuyente,
                 TipoProveedor,
+                AutorizaConflictos,
+                AutorizaDatosPersonales,
                 Documentos
-            } = req.body;
+            } = proveedorData;
 
-            // Validar que el proveedor exista
-            const proveedorExistente = await proveedores.findById(id);
-            if(!proveedorExistente) {
+            /* // Validar que el proveedor exista
+            const proveedorExistente = await sharePointService.getSupplierByRazonSocial(razonSocial);
+            if(!proveedorExistente) { 
                 return res.status(404).json({
                     success: false,
                     msg: "Proveedor no encontrado"
                 });
             }
 
-            // Validar que el NIT no esté registrado por otro proveedor
-            if (NIT && NIT !== proveedorExistente.NIT) {
-                const nitExistente = await proveedores.findOne({ NIT, _id: { $ne: id } });
-                if (nitExistente) {
+            // Validar que la Razón Social no esté registrada por otro proveedor
+            if (nuevaRazonSocial && nuevaRazonSocial !== razonSocial) {
+                const otroProveedor = await sharePointService.getSupplierByRazonSocial(nuevaRazonSocial);
+                if (otroProveedor) {
                     return res.status(400).json({
                         success: false,
-                        msg: "El NIT ya está registrado por otro proveedor"
+                        msg: "La Razón Social ya está registrada por otro proveedor"
                     });
                 }
-            }
+            } */
 
             // Validar que el correo no esté registrado por otro proveedor
-            if (CorreoElectronico && CorreoElectronico !== proveedorExistente.CorreoElectronico) {
-                const correoExistente = await proveedores.findOne({ 
-                    CorreoElectronico: CorreoElectronico, 
-                    _id: { $ne: id } 
-                });
-                if (correoExistente) {
+            if (CorreoElectronico && CorreoElectronico !== proveedor.CorreoElectronico) {
+                const correoExistente = await sharePointService.getSupplierByEmail(CorreoElectronico);
+                if (correoExistente && correoExistente.RazonSocial !== proveedorExistente.RazonSocial) {
                     return res.status(400).json({
                         success: false,
                         msg: "El correo ya está registrado por otro proveedor"
@@ -430,10 +439,9 @@ const httpProveedor = {
             }
 
             // Actualizar el proveedor y cambiar estado a "Actualizado"
-            const datosActualizar = {
+            const updateData = {
                 NIT,
                 DV,
-                RazonSocial,
                 DireccionNotificacion,
                 Telefono,
                 Ciudad,
@@ -453,11 +461,22 @@ const httpProveedor = {
                 TipoContribuyente,
                 TipoProveedor,
                 Documentos,
-                estadoProveedor: "Actualizado"
+                estadoProveedor: "Actualizado",
+                tokenActualizacion: null, // Eliminar token (uso único)
+                tokenActualizacionExpiracion: null
             };
+            // Elimnar campos undefined
             Object.keys(datosActualizar).forEach(key => datosActualizar[key] === undefined && delete datosActualizar[key]);
 
-            const proveedorActualizado = await proveedores.findByIdAndUpdate(id, datosActualizar, { new: true });
+            // Subir nuevos documentos si los hay
+            const filePaths = req.files ? req.files.map(f => f.path) : null;
+            await sharePointService.updateSupplier(proveedor.RazonSocial, updateData, filePaths);
+
+            // Limpiar archivos temporales
+            if (req.files) req.files.forEach(f => fs.existsSync(f.path) && fs.unlinkSync(f.path));
+
+            // Obtener el proveedor actualizado
+            const proveedorActualizado = await sharePointService.getSupplierByRazonSocial(proveedor.RazonSocial);
 
             res.status(200).json({
                 success: true,
@@ -477,10 +496,10 @@ const httpProveedor = {
     // Función para solicitar actualización al proveedor por medio de correo
     solicitarActualizacion: async (req, res) => {
         try {
-            const { id } = req.params;
+            const { razonSocial } = req.params;
 
             // Validar que el proveedor exista
-            const proveedor = await proveedores.findById(id);
+            const proveedor = await sharePointService.getSupplierByRazonSocial(razonSocial);
             if (!proveedor) {
                 return res.status(404).json({
                     success: false,
@@ -488,13 +507,23 @@ const httpProveedor = {
                 });
             }
 
-            // Enviar correo de actualización con el link del formulario
-            await enviarCorreoActualizacion(proveedor.CorreoElectronico, id);
+            // Generar token único
+            const crypto = await import('crypto');
+            const tokenActualizacion = crypto.default.randomBytes(32).toString('hex');
 
-            // Actualizar el estado del proveedor a "Pendiente Actualización"
-            const proveedorActualizado = await proveedores.findByIdAndUpdate(id, {
-                estadoProveedor: "Pendiente Actualización"
-            }, { new: true });
+            
+            // Actualizar el estado del proveedor a "Pendiente Actualización" y guardar el token único con expiración
+            await sharePointService.updateSupplier(razonSocial, {
+                tokenActualizacion: tokenActualizacion,
+                estadoProveedor: "Pendiente Actualización",
+                tokenActualizacionExpiracion: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 días
+            });
+            
+            // Obtener el proveedor actualizado
+            const proveedorActualizado = await sharePointService.getSupplierByRazonSocial(razonSocial);
+            
+            // Enviar correo de actualización con el link del formulario
+            await enviarCorreoActualizacion(proveedorActualizado.CorreoElectronico, tokenActualizacion);
 
             res.status(200).json({
                 success: true,
@@ -513,7 +542,7 @@ const httpProveedor = {
 
     aprobarPreRegistro: async (req, res) => {
         try {
-            const { nit } = req.params;
+            const { razonSocial } = req.params;
             const { comentario } = req.body;
 
             // Validar que el admin esté autenticado
@@ -525,7 +554,7 @@ const httpProveedor = {
             }
 
             // Validar que el proveedor exista
-            const proveedor = await sharePointService.getSupplierByNit(nit);
+            const proveedor = await sharePointService.getSupplierByRazonSocial(razonSocial);
             if (!proveedor) {
                 return res.status(404).json({
                     success: false,
@@ -542,7 +571,7 @@ const httpProveedor = {
             }
 
             // Actualizar el estado del proveedor a "Actualizado"
-            await sharePointService.updateSupplier(nit, {
+            await sharePointService.updateSupplier(razonSocial, {
                 estadoProveedor: "Actualizado",
                 comentarioAprobacion: comentario || null,
                 fechaAprobacion: new Date(),
@@ -550,7 +579,7 @@ const httpProveedor = {
             });
 
             // Obtener el proveedor actualizado despúes del cambio
-            const proveedorActualizado = await sharePointService.getSupplierByNit(nit);
+            const proveedorActualizado = await sharePointService.getSupplierByRazonSocial(razonSocial);
 
             // Enviar correo de aprobación al proveedor
             try {
@@ -576,7 +605,7 @@ const httpProveedor = {
 
     rechazarPreRegistro: async (req, res) => {
         try {
-            const { nit } = req.params;
+            const { razonSocial } = req.params;
             const { comentario } = req.body;
 
             // Validar que el admin esté autenticado
@@ -588,7 +617,7 @@ const httpProveedor = {
             }
 
             // Validar que el proveedor exista
-            const proveedor = await sharePointService.getSupplierByNit(nit);
+            const proveedor = await sharePointService.getSupplierByRazonSocial(razonSocial);
             if (!proveedor) {
                 return res.status(404).json({
                     success: false,
@@ -605,7 +634,7 @@ const httpProveedor = {
             }
 
             // Actualizar el estado del proveedor a "Inactivo"
-            await sharePointService.updateSupplier(nit, {
+            await sharePointService.updateSupplier(razonSocial, {
                 estadoProveedor: "Inactivo",
                 comentarioAprobacion: comentario || null,
                 fechaAprobacion: new Date(),
@@ -613,7 +642,7 @@ const httpProveedor = {
             });
 
             // Obtener el proveedor actualizado despúes del cambio
-            const proveedorActualizado = await sharePointService.getSupplierByNit(nit);
+            const proveedorActualizado = await sharePointService.getSupplierByRazonSocial(razonSocial);
 
             // Enviar correo de aprobación al proveedor
             try {
@@ -639,9 +668,9 @@ const httpProveedor = {
 
     eliminarProveedor: async (req, res) => {
         try {
-            const { nit } = req.params;
+            const { razonSocial } = req.params;
 
-            await sharePointService.deleteSupplier(nit);
+            await sharePointService.deleteSupplier(razonSocial);
 
             res.status(200).json({
                 success: true,

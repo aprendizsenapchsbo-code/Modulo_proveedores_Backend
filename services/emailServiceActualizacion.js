@@ -18,15 +18,15 @@ const getUrlFrontend = (ruta) => {
 }
 
 // Enviar correo solicitando actualización de datos del proveedor
-export const enviarCorreoActualizacion = async (CorreoElectronico, idProveedor = '') => {
+export const enviarCorreoActualizacion = async (CorreoElectronico, tokenActualizacion) => {
     try {
         if (!CorreoElectronico) {
             throw new Error("Email del proveedor requerido");
         }
 
         // Construir URL del formulario
-        const urlFormulario = idProveedor 
-            ? getUrlFrontend(`formulario-proveedor/${idProveedor}`) 
+        const urlFormulario = tokenActualizacion 
+            ? getUrlFrontend(`formulario-proveedor/${tokenActualizacion}`) 
             : getUrlFrontend('formulario-proveedor');
 
         const mailOptions = {

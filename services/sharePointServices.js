@@ -154,8 +154,8 @@ class SharePointService {
 
     // ------------------PROVEEDORES------------------
     // Obtener el ID de la subcarpeta "Proveedores"
-    getSupplierFolderPath(identifier) {
-        const sanitized = identifier.replace(/[^a-zA-Z0-9]/g, '_');
+    getSupplierFolderPath(razonSocial) {
+        const sanitized = razonSocial.toString().replace(/[^a-zA-Z0-9]/g, '_');
         return `${this.basePath}/${this.suppliersFolder}/Proveedor_${sanitized}`;
     }
 
@@ -165,12 +165,12 @@ class SharePointService {
     
     // Leer el archivo JSON de metadata dentro de una carpeta de proveedor
     async saveSupplierData(supplierData, filePaths = null) {
-        // Usar NIT como identificador principal, o token si es pre-registro
-        let identifier = supplierData.NIT || supplierData.tokenRegistro;
+        // Usar Razón Social como identificador principal
+        let identifier = supplierData.RazonSocial || supplierData.tokenRegistro;
 
-        if (!identifier) {
-            identifier = supplierData.RazonSocial || supplierData.nombre || 'Proveedor';
-        }
+        if (!identifier) identifier = supplierData.NIT;
+        if (!identifier) identifier = supplierData.tokenRegistro;
+        if (!identifier) identifier = 'Proveedor';
 
         const folderPath = this.getSupplierFolderPath(identifier);
         await this.ensureFolder(folderPath);
@@ -264,10 +264,10 @@ class SharePointService {
         }
     }
     
-    // Obtener un proveedor por su NIT (buscando la carpeta que coincida)
-    async getSupplierByNit(nit) {
+    // Obtener un proveedor por su Razón Social (buscando la carpeta que coincida)
+    async getSupplierByRazonSocial(razonSocial) {
         try {
-            const folderPath = this.getSupplierFolderPath(nit);
+            const folderPath = this.getSupplierFolderPath(razonSocial);
             const jsonPath = `${folderPath}/datos_proveedor.json`;
             const siteId = await this.getSiteId();
             const driveId = await this.getDriveId();
@@ -343,6 +343,28 @@ class SharePointService {
         return found;
     }
 
+    // Servicio para encontrar el token que va en el link magico al solicitar actualización al proveedor
+    async getSupplierByUpdateToken(token) {
+        console.log(`buscando token de actualización: ${token}`);
+        const todosProveedores = await this.getAllSuppliers();
+        
+        const found = todosProveedores.find(s => {
+            s.tokenActualizacion === token
+        });
+
+        if (found) {
+            // Opcional: verificar que el token no haya expirado
+            if (found.tokenActualizacionExpiracion && new Date(found.tokenActualizacionExpiracion) < new Date()){
+                console.log('Token expirado');
+                return null
+            }
+            console.log('Token encontrado');
+            return found
+        }
+        console.log('Token no encontrado');
+        return null;
+    }
+
     async getSupplierByEmail(email) {
         const normalizedEmail = email.toLowerCase();
         console.log(`Buscando email: ${normalizedEmail}`)
@@ -358,12 +380,12 @@ class SharePointService {
         return found;
     }
 
-    async updateSupplier(nit, updateData, documentPath = null) {
+    async updateSupplier(razonSocial, updateData, documentPath = null) {
         try {
-            const existing = await this.getSupplierByNit(nit);
+            const existing = await this.getSupplierByRazonSocial(razonSocial);
     
             if (!existing) {
-                throw new Error(`Proveedor con NIT ${nit} no encontrado`);
+                throw new Error(`Proveedor con Razón Social ${razonSocial} no encontrado`);
             }
     
             const merged = { ...existing, ...updateData, updateAt: new Date().toISOString() };
@@ -374,9 +396,9 @@ class SharePointService {
         }
     }
 
-    async deleteSupplier(nit) {
+    async deleteSupplier(razonSocial) {
         try {
-            const folderPath = this.getSupplierFolderPath(nit);
+            const folderPath = this.getSupplierFolderPath(razonSocial);
             const siteId = await this.getSiteId();
             const driveId = await this.getDriveId();
             const token = await authService.getAccessToken();
@@ -396,8 +418,8 @@ class SharePointService {
         }
     }
 
-    async deleteSupplierFolder(identifier) {
-        const folderPath = this.getSupplierFolderPath(identifier);
+    async deleteSupplierFolder(razonSocial) {
+        const folderPath = this.getSupplierFolderPath(razonSocial);
         const siteId = await this.getSiteId();
         const driveId = await this.getDriveId();
         const token = await authService.getAccessToken();

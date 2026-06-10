@@ -13,7 +13,7 @@ export const generarJWT = (payload) => {
                 rol: payload.rol
             },
             process.env.JWT_SECRET || 'clavesupersegura',
-            { expiresIn: "7d" },
+            { expiresIn: "1h" },
             (err, token) => {
                 if(err) {
                     console.log(err);

@@ -20,7 +20,7 @@ const generarToken = () => {
 
 // Helper para construir URLs seguras
 const getUrlFrontend = (ruta) => {
-    const base = process.env.FRONTEND_URL_PRODUCCION || 'https://www.proveedor.pch-sbo.com/gestion-proveedores/#/';
+    const base = /* process.env.FRONTEND_URL_PRODUCCION || */ 'http://localhost:5173';
     // Asegura que no haya doble slash // ni falte slash /
     return `${base.replace(/\/$/, '')}/${ruta.replace(/^\//, '')}`;
 };
