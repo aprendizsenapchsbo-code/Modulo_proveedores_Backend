@@ -5,9 +5,9 @@ import axios from "axios"
 
 class AuthService {
     constructor() {
-        this.clientId = process.env.AZURE_CLIENT_ID;
-        this.clientSecret = process.env.AZURE_CLIENT_SECRET;
-        this.tenantId = process.env.AZURE_TENANT_ID;
+        this.clientId = process.env.CLIENT_ID;
+        this.clientSecret = process.env.CLIENT_SECRET;
+        this.tenantId = process.env.TENANT_ID;
         this.tokenEndpoint = `https://login.microsoftonline.com/${this.tenantId}/oauth2/v2.0/token`;
         this.accessToken = null;
         this.tokenExpiry = null;

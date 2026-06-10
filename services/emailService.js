@@ -14,20 +14,14 @@ const transporter = nodemailer.createTransport({
     }
 })
 
-const generarToken = () => {
-    return crypto.randomBytes(30).toString('hex');
-}
-
 // Helper para construir URLs seguras
 const getUrlFrontend = (ruta) => {
-    const base = /* process.env.FRONTEND_URL_PRODUCCION || */ 'http://localhost:5173';
+    const base = /* process.env.FRONTEND_URL_PRODUCCION || */ 'http://localhost:5173/wp-content/themes/popularfx/vue-app/#/';
     // Asegura que no haya doble slash // ni falte slash /
     return `${base.replace(/\/$/, '')}/${ruta.replace(/^\//, '')}`;
 };
 
-export const enviarCorreoRegistro = async (CorreoElectronico) => {
-
-    const token = generarToken();
+export const enviarCorreoRegistro = async (CorreoElectronico, token) => {
     console.log('Token: ', token);
 
     const urlFormulario = getUrlFrontend(`formulario-proveedor/${token}`);
@@ -62,7 +56,6 @@ export const enviarCorreoRegistro = async (CorreoElectronico) => {
             <p style="color: #666; font-size: 12px;">
                 Cordialmente,<br>
                 <strong>PCH San Bartolomé S.A.S E.S.P.</strong><br>
-                Departamento de Proveedores
             </p>
             </div>
         `
@@ -205,7 +198,6 @@ export const enviarCorreoAprobacion = async (proveedor) => {
                 <p style="color: #666; font-size: 12px;">
                     Cordialmente,<br>
                     <strong>PCH San Bartolomé S.A.S E.S.P.</strong><br>
-                    Departamento de Proveedores
                 </p>
                 </div>
             `
@@ -272,7 +264,6 @@ export const enviarCorreoRechazar = async (proveedor) => {
                 <p style="color: #666; font-size: 12px;">
                     Cordialmente,<br>
                     <strong>PCH San Bartolomé S.A.S E.S.P.</strong><br>
-                    Departamento de Proveedores
                 </p>
                 </div>
             `

@@ -4,7 +4,6 @@ import { enviarCorreoRegistro, enviarCorreoRevisionEmpresa, enviarCorreoAprobaci
 import { enviarCorreoActualizacion } from "../services/emailServiceActualizacion.js";
 import path from 'path';
 import fs from 'fs';
-import { error } from 'console';
 
 
 const httpProveedor = {
@@ -56,6 +55,64 @@ const httpProveedor = {
             res.status(500).json({
                 success: false,
                 msg: "Error al encontrar el proveedor"
+            });
+        }
+    },
+
+    obtenerDocumentos: async (req, res) => {
+        try {
+            // Validar que sea admin
+            if (req.usuario.rol !== 'admin') {
+                res.status(401).json({
+                    success: false,
+                    msg: "¡UPS! No tienes acceso"
+                });
+            }
+
+            console.log('Params:', req.params)
+            const { razonSocial, nombre } = req.params;
+            console.log(`Buscando archivo: ${nombre} para proveedor: ${razonSocial}`)
+
+            const fileBuffer = await sharePointService.downloadFile(razonSocial, nombre);
+            res.setHeader('Content-Disposition', `inline; filename="${nombre}"`);
+            res.setHeader('Content-Type', 'application/pdf');
+            res.send(fileBuffer);
+
+        } catch (error) {
+            console.error('Error al obtener el documento:', error.message)
+            res.status(404).json({
+                success: false,
+                msg: "Documento no encontrado"
+            });
+        }
+    },
+
+    verificarToken: async (req, res) => {
+        try {
+            const { token } = req.params;
+            const preRegistro = await sharePointService.getSupplierByToken(token);
+            if (!preRegistro) {
+                return res.status(404).json({
+                    success: false,
+                    msg: "Token inválido o expirado"
+                });
+            }
+
+            // Verificar si ya fue utilizado (si el estado no es 'Invitación_enviada')
+            if (preRegistro.estado !== 'Invitación_enviada') {
+                return res.status(404).json({
+                    success: false,
+                    msg: "Este enlace ya fue utilizado"
+                });
+            }
+            return res.json({
+                success: true,
+                msg: "Token válido"
+            });
+        } catch (error) {
+            res.status(500).json({
+                success: false,
+                msg: error.message
             });
         }
     },
@@ -226,6 +283,15 @@ const httpProveedor = {
                 }
             }
 
+            const backendUrl = process.env.BACKEND_URL || `${req.protocol}://${req.get('host')}`;
+
+            const documentosGuardados = req.files.map(f => ({
+                tipo: 'Documento adjunto',
+                nombre: f.filename,  // Nombre real con sufijo
+                nombreOriginal: f.originalname,
+                url: `${backendUrl}/api/proveedor/${encodeURIComponent(RazonSocial)}/documentos/${encodeURIComponent(f.filename)}`
+            }));
+
             console.log(`NIT: ${NIT}`);
             console.log(`Razón Social: ${RazonSocial}`);
             
@@ -235,9 +301,10 @@ const httpProveedor = {
             const proveedorCompleto = {
                 ...preRegistro,
                 ...proveedorData,
+                estado: 'Invitación_usada',
                 estadoProveedor: 'Pre-registro',
                 fechaRegistroCompleto: new Date().toISOString(),
-                documentosSubidos: req.files.map(f => f.originalname)
+                Documentos: documentosGuardados
             };
 
             // Actualizar en SharePoint (usuando NIT como identificador)

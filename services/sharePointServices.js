@@ -296,6 +296,25 @@ class SharePointService {
         }
     }
     
+    async downloadFile(razonSocial, fileName) {
+        const folderPath = this.getSupplierFolderPath(razonSocial);
+        const filePath = `${folderPath}/${fileName}`;
+        const siteId = await this.getSiteId();
+        const driveId = await this.getDriveId();
+        const token = await authService.getAccessToken();
+        const encoded = await this.encodedPath(filePath)
+        const url = `${this.graphApiUrl}/sites/${siteId}/drives/${driveId}/root:/${encoded}:/content`;
+        console.log('🔍 URL de descarga:', url);
+
+        const response = await axios.get(url, {
+            headers: {
+                Authorization: `Bearer ${token}`
+            },
+            responseType: 'arraybuffer'
+        });
+        return response.data;
+    }
+
     // Obtener el ID de la carpeta 'API Documentos Proveedores Prueba'
     /* async getDocumentsFolderId(siteId) {
         try {
@@ -411,7 +430,7 @@ class SharePointService {
                 }
             });
 
-            console.log(`Proveedor eliminado: ${nit}`)
+            console.log(`Proveedor eliminado: ${razonSocial}`)
         } catch (error) {
             console.log('Error al eliminar el proveedor:', error.message);
             throw error;

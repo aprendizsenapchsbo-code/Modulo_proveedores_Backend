@@ -71,7 +71,6 @@ export const enviarCorreoActualizacion = async (CorreoElectronico, tokenActualiz
                 <p style="color: #666; font-size: 12px;">
                     Cordialmente,<br>
                     <strong>PCH San Bartolomé</strong><br>
-                    Departamento de Proveedores
                 </p>
                 </div>
             `

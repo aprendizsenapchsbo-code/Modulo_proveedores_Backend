@@ -8,6 +8,8 @@ const routes = Router();
 // Rutas Get
 routes.get("/", validarJWT, esAdmin, httpProveedor.getProveedores)
 routes.get("/:razonSocial", validarJWT, esAdmin, httpProveedor.getProveedorId)
+routes.get("/:razonSocial/documentos/:nombre", validarJWT, httpProveedor.obtenerDocumentos)
+routes.get("/verificar-token/:token", httpProveedor.verificarToken)
 
 // Rutas Post
 routes.post("/registro", validarJWT, esAdmin, httpProveedor.registroProveedor)
