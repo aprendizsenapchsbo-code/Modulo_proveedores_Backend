@@ -1,13 +1,16 @@
 import Router from "express";
-import { validarJWT } from "../middlewares/validar-jwt.js";
+import { validarJWT, esAdmin } from "../middlewares/validar-jwt.js";
 import httpUser from "../controllers/users.js";
 
 const routes = Router();
 
-routes.get("/", /* validarJWT, */ httpUser.getUsers)
-routes.post("/", httpUser.createUser)
+// Rutas públicas
 routes.post("/login", httpUser.login)
-routes.put("/:id", httpUser.updateUser)
-routes.delete("/:id", httpUser.deleteUser)
+
+// Rutas protegidas
+routes.post("/", validarJWT, esAdmin, httpUser.createUser)
+routes.get("/", validarJWT, esAdmin, httpUser.getUsers)
+routes.put("/:email", validarJWT, httpUser.updateUser)
+routes.delete("/:email", validarJWT, esAdmin, httpUser.deleteUser)
 
 export default routes;

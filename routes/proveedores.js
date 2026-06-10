@@ -1,22 +1,28 @@
 import { Router } from "express";
-import { validarJWT } from "../middlewares/validar-jwt.js";
+import { validarJWT, esAdmin } from "../middlewares/validar-jwt.js";
 import httpProveedor from "../controllers/proveedores.js";
-import { upload } from "../config/cloudinary.js";
+import { upload } from "../config/multer.js";
 
 const routes = Router();
 
-routes.get("/", validarJWT, httpProveedor.getProveedores)
-routes.get("/:id", httpProveedor.getProveedorId)
-routes.post("/registro", /* validarJWT, */ httpProveedor.registroProveedor)
-routes.post("/registro/completar/:token", httpProveedor.completarRegistro)
-routes.post("/aprobar/pre-registro/:id", validarJWT, httpProveedor.aprobarPreRegistro)
-routes.post("/rechazar/pre-registro/:id", validarJWT, httpProveedor.rechazarPreRegistro)
-routes.put("/:id/solicitar-actualizacion", /* validarJWT, */ httpProveedor.solicitarActualizacion)
-routes.put("/:id/actualizar-datos", /* validarJWT, */ httpProveedor.actualizarDatosProveedor)
-routes.put("/:id", /* validarJWT, */ httpProveedor.actualizarProveedor)
-routes.delete("/:id", /* validarJWT, */ httpProveedor.eliminarProveedor)
+// Rutas Get
+routes.get("/", validarJWT, esAdmin, httpProveedor.getProveedores)
+routes.get("/:razonSocial", validarJWT, esAdmin, httpProveedor.getProveedorId)
+routes.get("/:razonSocial/documentos/:nombre", validarJWT, httpProveedor.obtenerDocumentos)
+routes.get("/verificar-token/:token", httpProveedor.verificarToken)
 
-// Ruta para subir los archivos a cloudinary
-routes.post("/upload", upload.single('archivo'), httpProveedor.subirDocumento)
+// Rutas Post
+routes.post("/registro", validarJWT, esAdmin, httpProveedor.registroProveedor)
+routes.post("/registro/completar/:token", upload.array('documentos', 10), httpProveedor.completarRegistro)
+routes.post("/aprobar/pre-registro/:razonSocial", validarJWT, esAdmin, httpProveedor.aprobarPreRegistro)
+routes.post("/rechazar/pre-registro/:razonSocial", validarJWT, esAdmin, httpProveedor.rechazarPreRegistro)
+
+// Rutas Put
+routes.put("/:razonSocial/solicitar-actualizacion", validarJWT, esAdmin, httpProveedor.solicitarActualizacion)
+routes.put("/:token/actualizar-datos", upload.array('documentos', 10), httpProveedor.actualizarDatosProveedor)
+routes.put("/:RazonSocial", validarJWT, esAdmin, httpProveedor.actualizarProveedor)
+
+// Rutas Delete
+routes.delete("/:razonSocial", validarJWT, esAdmin, httpProveedor.eliminarProveedor)
 
 export default routes; 
