@@ -13,7 +13,7 @@ const transporter = nodemailer.createTransport({
 
 // Helper para construir URLs seguras
 const getUrlFrontend = (ruta) => {
-    const base = process.env.FRONTEND_URL_PRODUCCION || 'https://www.proveedor.pch-sbo.com/gestion-proveedores/#/';
+    const base = process.env.FRONTEND_URL_PRODUCCION || 'https://www.proveedor.pch-sbo.com';
     return `${base.replace(/\/$/, '')}/${ruta.replace(/^\//, '')}}`
 }
 
