@@ -2,8 +2,9 @@ import sharePointService from '../services/sharePointServices.js';
 // import Invitacion from "../models/invitacion.js";
 import { enviarCorreoRegistro, enviarCorreoRevisionEmpresa, enviarCorreoAprobacion, enviarCorreoRechazar } from "../services/emailService.js";
 import { enviarCorreoActualizacion } from "../services/emailServiceActualizacion.js";
-import path from 'path';
-import fs from 'fs';
+import { buffer } from 'stream/consumers';
+/* import path from 'path';
+import fs from 'fs'; */
 
 
 const httpProveedor = {
@@ -231,24 +232,11 @@ const httpProveedor = {
 
             // Validar autorizaciones
             const autorizaDatos = AutorizaDatosPersonales === true || AutorizaDatosPersonales === 'true';
-            if (!autorizaDatos) {
-                if (req.file && fs.existsSync(req.file.path)) {
-                    fs.unlinkSync(req.file.path);
-                }
-                return res.status(400).json({
-                    success: false,
-                    msg: 'Debe autorizar el tratamiento de datos personales'
-                });
-            }
-
             const autorizaConflictos = AutorizaConflictos === true || AutorizaConflictos === 'true';
-            if (!autorizaConflictos) {
-                if (req.file && fs.existsSync(req.file.path)) {
-                    fs.unlinkSync(req.file.path);
-                }
+            if (!autorizaDatos || !autorizaConflictos) {
                 return res.status(400).json({
                     success: false,
-                    msg: 'Debe autorizar el tratamiento de conflictos e intereses'
+                    msg: 'Debe autorizar los terminos'
                 });
             }
 
@@ -270,12 +258,9 @@ const httpProveedor = {
                 });
             }
             
-            // Validar que los docuementos sean PDF
+            // Validar que los documentos sean PDF
             for (const file of req.files) {
                 if (file.mimetype !== 'application/pdf') {
-                    // Limpiar archivos temporales
-                    req.files.forEach(f => fs.existsSync(f.path) && fs.unlinkSync(f.path));
-
                     return res.status(400).json({
                         success: false,
                         msg: 'Todos los documentos deben ser PDF'
@@ -283,14 +268,17 @@ const httpProveedor = {
                 }
             }
 
-            const backendUrl = process.env.BACKEND_URL || `${req.protocol}://${req.get('host')}`;
+            const uploadTimestamp = Date.now();
 
-            const documentosGuardados = req.files.map(f => ({
-                tipo: 'Documento adjunto',
-                nombre: f.filename,  // Nombre real con sufijo
-                nombreOriginal: f.originalname,
-                url: `${backendUrl}/api/proveedor/${encodeURIComponent(RazonSocial)}/documentos/${encodeURIComponent(f.filename)}`
-            }));
+            const documentosGuardados = req.files.map((f, index) => {
+                const nombreGuardado = `${uploadTimestamp}-${index}-${f.originalname}`;
+                return {
+                    tipo: 'Documento adjunto',
+                    nombre: nombreGuardado,
+                    nombreOriginal: f.originalname,
+                    url: `${process.env.BACKEND_URL || `${req.protocol}://${req.get('host')}`}/api/proveedor/${encodeURIComponent(RazonSocial)}/documentos/${encodeURIComponent(nombreGuardado)}`
+                };
+            });
 
             console.log(`NIT: ${NIT}`);
             console.log(`Razón Social: ${RazonSocial}`);
@@ -308,12 +296,17 @@ const httpProveedor = {
             };
 
             // Actualizar en SharePoint (usuando NIT como identificador)
-            const rutasArchivo = req.files.map(f => f.path);
-            await sharePointService.saveSupplierData(proveedorCompleto, rutasArchivo);
+            const filesWithBuffers = req.files.map((f, index) => {
+                const nombreGuardado = `${uploadTimestamp}-${index}-${f.originalname}`;
+                return {
+                    buffer: f.buffer,
+                    originalname: f.originalname,
+                    savedName: nombreGuardado
+                };
+            });
+
+            await sharePointService.saveSupplierData(proveedorCompleto, filesWithBuffers);
             console.log('Datos guardados en SharePoint');
-            
-            // Limpiar archivos temporales
-            req.files.forEach(f => fs.existsSync(f.path) && fs.unlinkSync(f.path));
 
             // Eliminar carpeta temporal
             await sharePointService.deleteSupplierFolder(token);
@@ -340,8 +333,6 @@ const httpProveedor = {
             
         } catch (error) {
             console.error('Error al completar el registro:', error.message);
-            // limpiar archivos en caso de error
-            if (req.files) req.files.forEach(f => fs.existsSync(f.path) && fs.unlinkSync(f.path));
             res.status(500).json({ 
                 success: false, 
                 msg: error.message 
@@ -535,12 +526,11 @@ const httpProveedor = {
             // Elimnar campos undefined
             Object.keys(datosActualizar).forEach(key => datosActualizar[key] === undefined && delete datosActualizar[key]);
 
-            // Subir nuevos documentos si los hay
-            const filePaths = req.files ? req.files.map(f => f.path) : null;
-            await sharePointService.updateSupplier(proveedor.RazonSocial, updateData, filePaths);
-
-            // Limpiar archivos temporales
-            if (req.files) req.files.forEach(f => fs.existsSync(f.path) && fs.unlinkSync(f.path));
+            const filesWithBuffers = req.files ? req.files.map(f => ({
+                buffer: f.buffer,
+                originalname: f.originalname
+            })) : null;
+            await sharePointService.updateSupplier(proveedor.RazonSocial, updateData, filesWithBuffers);
 
             // Obtener el proveedor actualizado
             const proveedorActualizado = await sharePointService.getSupplierByRazonSocial(proveedor.RazonSocial);

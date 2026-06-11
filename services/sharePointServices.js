@@ -1,8 +1,7 @@
 import axios from "axios";
-import fs from 'fs'
-import path from "path";
+/* import fs from 'fs'
+import path from "path"; */
 import authService from "./authService.js";
-import { error } from "console";
 
 /* Servicio para gestionar documentos en el SharePoint, se encarga de crear carpetas y de subir los documentos */
 
@@ -159,12 +158,12 @@ class SharePointService {
         return `${this.basePath}/${this.suppliersFolder}/Proveedor_${sanitized}`;
     }
 
-    getSupplierJsonPath(identifier) {
+    /* getSupplierJsonPath(identifier) {
         return `${this.getSupplierFolderPath(identifier)}/datos_proveedor.json`;
-    }
+    } */
     
     // Leer el archivo JSON de metadata dentro de una carpeta de proveedor
-    async saveSupplierData(supplierData, filePaths = null) {
+    async saveSupplierData(supplierData, files = null) {
         // Usar Razón Social como identificador principal
         let identifier = supplierData.RazonSocial || supplierData.tokenRegistro;
 
@@ -191,24 +190,21 @@ class SharePointService {
             }
         });
 
-        // Subir multiples documentos
-        if (filePaths && Array.isArray(filePaths) && filePaths.length > 0) {
-            for (const filePath of filePaths) {
-                if (fs.existsSync(filePath)) {
-                    const fileName = path.basename(filePath);
-                    const filePathUrl = `${folderPath}/${fileName}`;
-                    const encodedFile = this.encodedPath(filePathUrl);
-                    const fileUrl = `${this.graphApiUrl}/sites/${siteId}/drives/${driveId}/root:/${encodedFile}:/content`;
-                    const fileContent = fs.readFileSync(filePath);
+        // Subir documentos desde buffers
+        if (files && Array.isArray(files) && files.length > 0) {
+            for (const file of files) {
+                const fileName = file.savedName;
+                const filePathUrl = `${folderPath}/${fileName}`;
+                const encodedFile = this.encodedPath(filePathUrl);
+                const fileUrl = `${this.graphApiUrl}/sites/${siteId}/drives/${driveId}/root:/${encodedFile}:/content`;
 
-                    await axios.put(fileUrl, fileContent, {
-                        headers: {
-                            Authorization: `Bearer ${token}`,
-                            'Content-Type': 'application/octet-stream'
-                        }
-                    });
-                    console.log(`Documento subido ${fileName}`)
-                }
+                await axios.put(fileUrl, file.buffer, {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        'Content-Type': 'application/octet-stream'
+                    }
+                });
+                console.log(`Documento subido ${fileName}`)
             }
         }
         return { succes: true, folderPath };
@@ -367,9 +363,9 @@ class SharePointService {
         console.log(`buscando token de actualización: ${token}`);
         const todosProveedores = await this.getAllSuppliers();
         
-        const found = todosProveedores.find(s => {
+        const found = todosProveedores.find(s => 
             s.tokenActualizacion === token
-        });
+        );
 
         if (found) {
             // Opcional: verificar que el token no haya expirado
@@ -399,7 +395,7 @@ class SharePointService {
         return found;
     }
 
-    async updateSupplier(razonSocial, updateData, documentPath = null) {
+    async updateSupplier(razonSocial, updateData, files = null) {
         try {
             const existing = await this.getSupplierByRazonSocial(razonSocial);
     
@@ -408,7 +404,7 @@ class SharePointService {
             }
     
             const merged = { ...existing, ...updateData, updateAt: new Date().toISOString() };
-            return await this.saveSupplierData(merged, documentPath);
+            return await this.saveSupplierData(merged, files);
         } catch {
             console.error('Error no se pudo actualizar el proveedor:', error.message)
             throw error
@@ -421,7 +417,7 @@ class SharePointService {
             const siteId = await this.getSiteId();
             const driveId = await this.getDriveId();
             const token = await authService.getAccessToken();
-            const encoded = await this.encodedPath(folderPath)
+            const encoded = await this.encodedPath(folderPath);
             const url = `${this.graphApiUrl}/sites/${siteId}/drives/${driveId}/root:/${encoded}`;
 
             await axios.delete(url, {

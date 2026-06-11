@@ -1,43 +1,28 @@
 import multer from "multer";
-import path from 'path';
-import fs from 'fs';
 
-/* 
-Configuración de Multer para subir archivos
-Los archivos se guardan temporalmente en uploads/ antes de subirlos al SharePoint
-*/
-
-// Crear carpeta uploads si no existe
-const uploadDir = './uploads';
-if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-// Configurar almacenamiento
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, uploadDir);
-    },
-    filename: (req, file, cb) => {
-        // Nombre único con timestamp
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        const ext = path.extname(file.originalname);
-        const name = path.basename(file.originalname, ext);
-        cb(null, name + '-' + uniqueSuffix + ext);
-    }
-});
+// Usar almacenamiento en memoria (no escribe en disco)
+const storage = multer.memoryStorage();
 
 // Filtro de archivo permitido
 const fileFilter = (req, file, cb) => {
+    console.log('Archivo recibido en multer:', {
+        mimetype: file.mimetype,
+        originalname: file.originalname,
+        fieldname: file.fieldname
+    });
+    
+    const validMimes = ['application/pdf', 'application/x-pdf', 'application/octet-stream'];
     // Solo se permite archivos .pdf
-    const isMimeValid = file.mimetype === 'application/pdf';
+    const isMimeValid = validMimes.includes(file.mimetype) || file.mimetype.includes('pdf');
 
-    const ext = path.extname(file.originalname).toLowerCase();
-    const isExtValid = ext === '.pdf';
+    const ext = file.originalname.split('.').pop().toLowerCase();
+    const isExtValid = ext === 'pdf';
 
     if(isMimeValid && isExtValid) {
+        console.log('✅ Archivo aceptado por multer');
         cb(null, true);
     } else {
+        console.log('❌ Archivo rechazado por multer');
         cb(new Error('Solo se permiten archivos en PDF'), false);
     }
 };
