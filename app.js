@@ -16,7 +16,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cors({ 
-  origin: /* process.env.FRONTEND_URL_PRODUCCION || */ 'http://localhost:5173',
+  origin: process.env.FRONTEND_URL_PRODUCCION || 'http://localhost:5173',
   credentials: true
 }));
 
@@ -48,7 +48,7 @@ if (process.env.NODE_ENV !== 'production') {
     console.log('='.repeat(50));
     console.log(`Puerto ${PORT}`);
     console.log(`Base de datos SharePoint`)
-    console.log(`CORS: ${/* process.env.FRONTEND_URL_PRODUCCION || */ process.env.URL_PRUEBAS}`);
+    console.log(`CORS: ${process.env.FRONTEND_URL_PRODUCCION || process.env.URL_PRUEBAS}`);
     
   });
 }
