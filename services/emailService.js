@@ -1,5 +1,3 @@
-// import proveedores from '../models/proveedores.js';
-// import Invitacion from '../models/invitacion.js';
 import crypto from 'crypto';
 import nodemailer from 'nodemailer';
 import sharePointServices from './sharePointServices.js';
@@ -16,7 +14,7 @@ const transporter = nodemailer.createTransport({
 
 // Helper para construir URLs seguras
 const getUrlFrontend = (ruta) => {
-    const base = process.env.URL_PRODUCCION || 'https://www.proveedor.pch-sbo.com/gestion-proveedores/#/';
+    const base = process.env.URL_PRODUCCION || 'https://www.proveedor.pch-sbo.com/gestion-proveedores/#/' ;
     // Asegura que no haya doble slash // ni falte slash /
     return `${base.replace(/\/$/, '')}/${ruta.replace(/^\//, '')}`;
 };
@@ -128,7 +126,7 @@ export const enviarCorreoRevisionEmpresa = async (proveedor) => {
             </table>
             
             <p style="text-align: center; margin: 20px 0;">
-            <a href="${process.env.FRONTEND_URL_PRODUCCION}/#/aprobacion-pre-registro" 
+            <a href="${process.env.URL_PRODUCCION}/#/aprobacion-pre-registro" 
             style="background-color: #28a745; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">
             👉 Ir a Panel de Validación
                 </a>
