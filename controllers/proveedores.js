@@ -118,6 +118,30 @@ const httpProveedor = {
         }
     },
 
+    getProveedorByUpdateToken: async (req, res) => {
+        try {
+            const { token } = req.params;
+
+            const proveedor = await sharePointService.getSupplierByUpdateToken(token);
+            if (!proveedor) {
+                return res.status(404).json({
+                    success: false,
+                    msg: 'Token de actualización inválido o expirado'
+                });
+            }
+            res.json({
+                success: true,
+                data: proveedor
+            })
+        } catch (error) {
+            console.error('Error al obtener proveedor por token de actualización:', error);
+            res.status(500).json({
+                success: false,
+                msg: error.message
+            });
+        }
+    },
+
     // Enviar correo al proveedor
     registroProveedor: async (req, res) => {
         try {
@@ -305,11 +329,11 @@ const httpProveedor = {
                 };
             });
 
-            await sharePointService.saveSupplierData(proveedorCompleto, filesWithBuffers);
+            await sharePointService.saveSupplierData(proveedorCompleto, filesWithBuffers, new Date().getFullYear().toString());
             console.log('Datos guardados en SharePoint');
 
             // Eliminar carpeta temporal
-            await sharePointService.deleteSupplierFolder(token);
+            await sharePointService.deleteSupplierBaseFolder(token);
 
             // Enviar correo a la empresa para revisión
             try {
@@ -428,7 +452,12 @@ const httpProveedor = {
     actualizarDatosProveedor: async (req, res) => {
         try {
             const { token } = req.params;
-            const proveedorData = req.body;
+            let proveedorData = req.body;
+
+            // Si los datos vienen como JSON string en 'datosProveedor'
+            if (req.body.datosProveedor) {
+                proveedorData = JSON.parse(req.body.datosProveedor);
+            }
 
             // Buscar proveedor por token de actualización
             const proveedor = await sharePointService.getSupplierByUpdateToken(token);
@@ -438,10 +467,14 @@ const httpProveedor = {
                     msg: "Enlace inválido o expirado"
                 });
             }
+            const anioObjetivo = proveedor.anioActualizacionPendiente || new Date().getFullYear().toString();
+
+            const existingDocs = proveedor.Documentos || [];
 
             const {
                 NIT,
                 DV,
+                RazonSocial: nuevaRazonSocial, // nueva razón social si cambia
                 DireccionNotificacion,
                 Telefono,
                 Ciudad,
@@ -460,22 +493,13 @@ const httpProveedor = {
                 CorreoElectronicoResponsable,
                 TipoContribuyente,
                 TipoProveedor,
-                AutorizaConflictos,
-                AutorizaDatosPersonales,
-                Documentos
             } = proveedorData;
 
-            /* // Validar que el proveedor exista
-            const proveedorExistente = await sharePointService.getSupplierByRazonSocial(razonSocial);
-            if(!proveedorExistente) { 
-                return res.status(404).json({
-                    success: false,
-                    msg: "Proveedor no encontrado"
-                });
-            }
+            // Usar la razón social actual si no se envía una nueva
+            const razonSocialFinal = nuevaRazonSocial || proveedor.RazonSocial;
 
             // Validar que la Razón Social no esté registrada por otro proveedor
-            if (nuevaRazonSocial && nuevaRazonSocial !== razonSocial) {
+            if (nuevaRazonSocial && nuevaRazonSocial !== proveedor.RazonSocial) {
                 const otroProveedor = await sharePointService.getSupplierByRazonSocial(nuevaRazonSocial);
                 if (otroProveedor) {
                     return res.status(400).json({
@@ -483,12 +507,12 @@ const httpProveedor = {
                         msg: "La Razón Social ya está registrada por otro proveedor"
                     });
                 }
-            } */
+            }
 
             // Validar que el correo no esté registrado por otro proveedor
             if (CorreoElectronico && CorreoElectronico !== proveedor.CorreoElectronico) {
                 const correoExistente = await sharePointService.getSupplierByEmail(CorreoElectronico);
-                if (correoExistente && correoExistente.RazonSocial !== proveedorExistente.RazonSocial) {
+                if (correoExistente && correoExistente.RazonSocial !== proveedor.RazonSocial) {
                     return res.status(400).json({
                         success: false,
                         msg: "El correo ya está registrado por otro proveedor"
@@ -496,10 +520,29 @@ const httpProveedor = {
                 }
             }
 
+            // Procesar nuevos archivos subidos
+            let nuevosDocs = [];
+            const uploadTimestamp = Date.now();
+            if (req.files && req.files.length > 0) {
+                nuevosDocs = req.files.map((file, index) => {
+                    const nombreGuardado = `${uploadTimestamp}-${index}-${file.originalname}`;
+                    return {
+                        tipo: '',
+                        nombre: nombreGuardado,
+                        nombreOriginal: file.originalname,
+                        url: `${process.env.BACKEND_URL || `https://${req.get('host')}`}/api/proveedor/${proveedor.RazonSocial}/documentos/${encodeURIComponent(nombreGuardado)}`
+                    };
+                });
+            }
+
+            // Combinar documentos existentes + nuevos
+            const todosDocs = [...existingDocs, ...nuevosDocs];
+
             // Actualizar el proveedor y cambiar estado a "Actualizado"
             const updateData = {
                 NIT,
                 DV,
+                RazonSocial: razonSocialFinal,
                 DireccionNotificacion,
                 Telefono,
                 Ciudad,
@@ -518,22 +561,27 @@ const httpProveedor = {
                 CorreoElectronicoResponsable,
                 TipoContribuyente,
                 TipoProveedor,
-                Documentos,
+                Documentos: todosDocs,
                 estadoProveedor: "Actualizado",
                 tokenActualizacion: null, // Eliminar token (uso único)
-                tokenActualizacionExpiracion: null
+                tokenActualizacionExpiracion: null,
+                fechaActualización: new Date().toISOString()
             };
             // Elimnar campos undefined
-            Object.keys(datosActualizar).forEach(key => datosActualizar[key] === undefined && delete datosActualizar[key]);
+            Object.keys(updateData).forEach(key => {
+                if (updateData[key] === undefined) delete updateData[key];
+            });
 
-            const filesWithBuffers = req.files ? req.files.map(f => ({
+            const filesWithBuffers = req.files ? req.files.map((f, idx) => ({
                 buffer: f.buffer,
-                originalname: f.originalname
+                originalname: f.originalname,
+                savedName: nuevosDocs[idx]?.nombre // usamos el nombre generado
             })) : null;
-            await sharePointService.updateSupplier(proveedor.RazonSocial, updateData, filesWithBuffers);
+            // Actualizar en SharePoint
+            await sharePointService.updateSupplier(proveedor.RazonSocial, updateData, filesWithBuffers, anioObjetivo);
 
             // Obtener el proveedor actualizado
-            const proveedorActualizado = await sharePointService.getSupplierByRazonSocial(proveedor.RazonSocial);
+            const proveedorActualizado = await sharePointService.getSupplierByRazonSocial(razonSocialFinal);
 
             res.status(200).json({
                 success: true,
@@ -564,6 +612,7 @@ const httpProveedor = {
                 });
             }
 
+            const anioObjetivo = (new Date().getFullYear() + 1).toString(); // o el año siguiente
             // Generar token único
             const crypto = await import('crypto');
             const tokenActualizacion = crypto.default.randomBytes(32).toString('hex');
@@ -573,13 +622,14 @@ const httpProveedor = {
             await sharePointService.updateSupplier(razonSocial, {
                 tokenActualizacion: tokenActualizacion,
                 estadoProveedor: "Pendiente Actualización",
-                tokenActualizacionExpiracion: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 días
+                tokenActualizacionExpiracion: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 días
+                anioActualizacionPendiente: anioObjetivo
             });
             
             // Obtener el proveedor actualizado
             const proveedorActualizado = await sharePointService.getSupplierByRazonSocial(razonSocial);
             
-            // Enviar correo de actualización con el link del formulario
+            // Enviar correo de actualización con el enlace que incluya el token y el año
             await enviarCorreoActualizacion(proveedorActualizado.CorreoElectronico, tokenActualizacion);
 
             res.status(200).json({

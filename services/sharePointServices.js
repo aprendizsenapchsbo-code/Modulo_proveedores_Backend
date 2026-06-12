@@ -143,7 +143,7 @@ class SharePointService {
             if (!response) {
                 throw new Error(`No se encontró la carpeta: ${folderPath}`);
             }
-            return response.data.id;;
+            return response.data.id;
             
         } catch (error) {
             console.error('Error al obtener el ID de la carpeta raiz:', error.message);
@@ -153,17 +153,51 @@ class SharePointService {
 
     // ------------------PROVEEDORES------------------
     // Obtener el ID de la subcarpeta "Proveedores"
-    getSupplierFolderPath(razonSocial) {
+    getSupplierFolderPath(razonSocial, anio = null) {
         const sanitized = razonSocial.toString().replace(/[^a-zA-Z0-9]/g, '_');
-        return `${this.basePath}/${this.suppliersFolder}/Proveedor_${sanitized}`;
+        const anioFolder = anio ? anio.toString() : this.getCurrentYear();
+        return `${this.basePath}/${this.suppliersFolder}/Proveedor_${sanitized}/${anioFolder}`;
     }
 
-    /* getSupplierJsonPath(identifier) {
-        return `${this.getSupplierFolderPath(identifier)}/datos_proveedor.json`;
-    } */
+    // Obtener el año actual (para pre-registro o creación inicial)
+    getCurrentYear() {
+        return new Date().getFullYear().toString();
+    }
+
+    sanitize(str) {
+        return str.toString().replace(/[^a-zA-Z0-9]/g, '_');
+    }
+
+    // Obtener el año mas reciente de un proveedor (para el dashboard)
+    async getLatestYear(razonSocial) {
+        const baseFolder = `${this.basePath}/${this.suppliersFolder}/Proveedor_${this.sanitize(razonSocial)}`;
+        const siteId = await this.getSiteId();
+        const driveId = await this.getDriveId();
+        const token = await authService.getAccessToken();
+        const encoded = this.encodedPath(baseFolder);
+        const url = `${this.graphApiUrl}/sites/${siteId}/drives/${driveId}/root:/${encoded}:/children`;
+        try {
+            const response = await axios.get(url, {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            });
+
+            const folders = response.data.value.filter(item => item.folder);
+            if (folders.length === 0) return null;
+
+            // Ordenar por nombre descendente (año mayor primero) y tomar el primero
+            const years = folders.map(f => parseInt(f.name)).filter(y => !isNaN(y));
+            if (years.length === 0) return null;
+            return Math.max(...years).toString();
+
+        } catch (err) {
+            return null;
+        }
+    }
     
     // Leer el archivo JSON de metadata dentro de una carpeta de proveedor
-    async saveSupplierData(supplierData, files = null) {
+    async saveSupplierData(supplierData, files = null, anio = null) {
         // Usar Razón Social como identificador principal
         let identifier = supplierData.RazonSocial || supplierData.tokenRegistro;
 
@@ -171,7 +205,8 @@ class SharePointService {
         if (!identifier) identifier = supplierData.tokenRegistro;
         if (!identifier) identifier = 'Proveedor';
 
-        const folderPath = this.getSupplierFolderPath(identifier);
+        const anioFinal = anio || this.getCurrentYear();
+        const folderPath = this.getSupplierFolderPath(identifier, anioFinal);
         await this.ensureFolder(folderPath);
 
         const siteId = await this.getSiteId();
@@ -230,7 +265,20 @@ class SharePointService {
             const proveedores = [];
             for (const item of response.data.value) {
                 if (item.folder) {
-                    const jsonPath = `${supplierBase}/${item.name}/datos_proveedor.json`;
+                    // Obtener subcarpetas de años para este proveedor
+                    const proveedorFolderPath = `${supplierBase}/${item.name}`;
+                    const encodedProveedor = this.encodedPath(proveedorFolderPath);
+                    const yearsUrl = `${this.graphApiUrl}/sites/${siteId}/drives/${driveId}/root:/${encodedProveedor}:/children`;
+                    const yearsRes = await axios.get(yearsUrl, {
+                        headers: {
+                            Authorization: `Bearer ${token}`
+                        }
+                    });
+                    const yearFolders = yearsRes.data.value.filter(f => f.folder);
+                    if (yearFolders.length === 0) continue;
+                    // Obtener por año descendente y tomar el primero
+                    const latestYear = yearFolders.map(f => parseInt(f.name)).sort((a,b) => b-a)[0];
+                    const jsonPath = `${proveedorFolderPath}/${latestYear}/datos_proveedor.json`;
                     try {
                         const encodedJson = this.encodedPath(jsonPath);
                         const jsonUrl = `${this.graphApiUrl}/sites/${siteId}/drives/${driveId}/root:/${encodedJson}`;
@@ -248,7 +296,7 @@ class SharePointService {
 
                         proveedores.push(contentRes.data);
                     } catch (err) {
-                        console.warn(`No se pudo leer JSON en ${item.name}:`, err.message);
+                        console.warn(`No se pudo leer JSON en ${item.name}/${latestYear}:`, err.message);
                     }
                 }
             }
@@ -263,7 +311,9 @@ class SharePointService {
     // Obtener un proveedor por su Razón Social (buscando la carpeta que coincida)
     async getSupplierByRazonSocial(razonSocial) {
         try {
-            const folderPath = this.getSupplierFolderPath(razonSocial);
+            const latestYear = await this.getLatestYear(razonSocial);
+            if (!latestYear) return null;
+            const folderPath = this.getSupplierFolderPath(razonSocial, latestYear);
             const jsonPath = `${folderPath}/datos_proveedor.json`;
             const siteId = await this.getSiteId();
             const driveId = await this.getDriveId();
@@ -293,7 +343,9 @@ class SharePointService {
     }
     
     async downloadFile(razonSocial, fileName) {
-        const folderPath = this.getSupplierFolderPath(razonSocial);
+        const latestYear = await this.getLatestYear(razonSocial);
+        if (!latestYear) return null;
+        const folderPath = this.getSupplierFolderPath(razonSocial, latestYear);
         const filePath = `${folderPath}/${fileName}`;
         const siteId = await this.getSiteId();
         const driveId = await this.getDriveId();
@@ -395,29 +447,28 @@ class SharePointService {
         return found;
     }
 
-    async updateSupplier(razonSocial, updateData, files = null) {
+    async updateSupplier(razonSocial, updateData, files = null, anio = null) {
         try {
             const existing = await this.getSupplierByRazonSocial(razonSocial);
-    
             if (!existing) {
                 throw new Error(`Proveedor con Razón Social ${razonSocial} no encontrado`);
             }
     
             const merged = { ...existing, ...updateData, updateAt: new Date().toISOString() };
-            return await this.saveSupplierData(merged, files);
-        } catch {
-            console.error('Error no se pudo actualizar el proveedor:', error.message)
-            throw error
+            return await this.saveSupplierData(merged, files, anio);
+        } catch (error) {
+            console.error('Error no se pudo actualizar el proveedor:', error.message);
+            throw error;
         }
     }
 
     async deleteSupplier(razonSocial) {
         try {
-            const folderPath = this.getSupplierFolderPath(razonSocial);
+            const baseFolder = `${this.basePath}/${this.suppliersFolder}/Proveedor_${this.sanitize(razonSocial)}`;
             const siteId = await this.getSiteId();
             const driveId = await this.getDriveId();
             const token = await authService.getAccessToken();
-            const encoded = await this.encodedPath(folderPath);
+            const encoded = await this.encodedPath(baseFolder);
             const url = `${this.graphApiUrl}/sites/${siteId}/drives/${driveId}/root:/${encoded}`;
 
             await axios.delete(url, {
@@ -429,6 +480,49 @@ class SharePointService {
             console.log(`Proveedor eliminado: ${razonSocial}`)
         } catch (error) {
             console.log('Error al eliminar el proveedor:', error.message);
+            throw error;
+        }
+    }
+
+    // Eliminar carpeta de un año especifico para un proveedor
+    async deleteSupplierYearFolder(razonSocial, anio) {
+        try {
+            const folderPath = this.getSupplierFolderPath(razonSocial, anio);
+            const siteId = await this.getSiteId();
+            const driveId = await this.getDriveId();
+            const token = await authService.getAccessToken();
+            const encoded = this.encodedPath(folderPath);
+            const url = `${this.graphApiUrl}/sites/${siteId}/drives/${driveId}/root:/${encoded}`;
+
+            await axios.delete(url, {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            });
+            console.log(`Carpeta del año ${anio} eliminada para: ${razonSocial}`);
+        } catch (error) {
+            console.error('Error al eliminar la carpeta del año:', error.message);
+            throw error;
+        }
+    }
+
+    // Eliminar la carpeta raíz del proveedor (toda la carpeta, sin importar el año)
+    async deleteSupplierBaseFolder(identifier) {
+        try {
+            const sanitized = this.sanitize(identifier);
+            const baseFolder = `${this.basePath}/${this.suppliersFolder}/Proveedor_${sanitized}`;
+            const siteId = await this.getSiteId();
+            const driveId = await this.getDriveId();
+            const token = await authService.getAccessToken();
+            const encoded = this.encodedPath(baseFolder);
+            const url = `${this.graphApiUrl}/sites/${siteId}/drives/${driveId}/root:/${encoded}`;
+
+            await axios.delete(url, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            console.log(`Carpeta base del proveedor eliminada: ${baseFolder}`);
+        } catch (error) {
+            console.error('Error al eliminar la carpeta base del proveedor:', error.message);
             throw error;
         }
     }

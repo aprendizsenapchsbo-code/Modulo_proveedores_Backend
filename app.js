@@ -5,7 +5,6 @@ console.log('SHAREPOINT_SITE_NAME:', process.env.SHAREPOINT_SITE_NAME);
 
 import "dotenv/config"
 import express from 'express';
-/* import mongoose from 'mongoose';*/
 import cors from "cors";
 import morgan from "morgan";
 import users from "./routes/users.js";
