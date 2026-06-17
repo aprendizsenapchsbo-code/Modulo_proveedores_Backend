@@ -6,6 +6,25 @@ import { buffer } from 'stream/consumers';
 /* import path from 'path';
 import fs from 'fs'; */
 
+function obtenerTiposDocumentosRequeridos(tipoContribuyente) {
+    if (tipoContribuyente === 'Persona Jurídica') {
+        return [
+            'COPIA DE RUT COMPLETO',
+            'COPIA DE CAMARA COMERCIO VIGENTE (Menor a 90 días)',
+            'COPIA DE DOCUMENTO DE IDENTIFICACION DEL REPRESENTANTE LEGAL',
+            'CERTIFICACION BANCARIA',
+            '2 CERTIFICADOS COMERCIALES',
+            'ESTADOS FINANCIEROS COMPARATIVOS DE LOS (2) ULTIMOS AÑOS'
+        ];
+    } else if (tipoContribuyente === 'Persona Natural') {
+        return [
+            'COPIA DE RUT COMPLETO',
+            'COPIA DE DOCUMENTO DE IDENTIFICACION DEL RESPRESENTANTE LEGAL',
+            'CERTIFICACIÓN BANCARIA'
+        ];
+    }
+    return [];
+}
 
 const httpProveedor = {
     getProveedores: async (req, res) => {
@@ -63,12 +82,12 @@ const httpProveedor = {
     obtenerDocumentos: async (req, res) => {
         try {
             // Validar que sea admin
-            if (req.usuario.rol !== 'admin') {
+            /* if (req.usuario.rol !== 'admin') {
                 res.status(401).json({
                     success: false,
                     msg: "¡UPS! No tienes acceso"
                 });
-            }
+            } */
 
             console.log('Params:', req.params)
             const { razonSocial, nombre } = req.params;
@@ -168,9 +187,10 @@ const httpProveedor = {
                 estado: 'Invitación_enviada',
                 tokenRegistro: token
             };
+            const anioPreRegistro = process.env.PREREGISTRO_ANIO_BASE || new Date().getFullYear().toString();
             
             // Guardar el registro inicial en el SharePoint
-            await sharePointService.saveSupplierData(supplierData, null);
+            await sharePointService.saveSupplierData(supplierData, null, anioPreRegistro);
             console.log('Registro inicial guardado en SharePoint');
             
             // Enviando correo de pre-registro
@@ -272,13 +292,13 @@ const httpProveedor = {
                 })
             }
 
-            // Validar cantidad de documentos según el tipo de contribuyente
-            const documentosRequeridos = (TipoContribuyente === 'Persona Natural') ? 3 : 6;
+            // Obtener tipos de documentos según tipo de contribuyente
+            const tiposRequeridos = obtenerTiposDocumentosRequeridos(TipoContribuyente);
 
-            if (req.files.length < documentosRequeridos) {
+            if (req.files.length < tiposRequeridos.length) {
                 return res.status(400).json({
                     success: false,
-                    msg: `Debe subir ${documentosRequeridos} docuementos`
+                    msg: `Debe subir ${tiposRequeridos.length} documentos`
                 });
             }
             
@@ -297,7 +317,7 @@ const httpProveedor = {
             const documentosGuardados = req.files.map((f, index) => {
                 const nombreGuardado = `${uploadTimestamp}-${index}-${f.originalname}`;
                 return {
-                    tipo: 'Documento adjunto',
+                    tipo: tiposRequeridos[index] || 'Documento adjunto',
                     nombre: nombreGuardado,
                     nombreOriginal: f.originalname,
                     url: `${process.env.BACKEND_URL || `${req.protocol}://${req.get('host')}`}/api/proveedor/${encodeURIComponent(RazonSocial)}/documentos/${encodeURIComponent(nombreGuardado)}`
@@ -328,8 +348,9 @@ const httpProveedor = {
                     savedName: nombreGuardado
                 };
             });
+            const anioPreRegistro = process.env.PREREGISTRO_ANIO_BASE || new Date().getFullYear().toString();
 
-            await sharePointService.saveSupplierData(proveedorCompleto, filesWithBuffers, new Date().getFullYear().toString());
+            await sharePointService.saveSupplierData(proveedorCompleto, filesWithBuffers, anioPreRegistro);
             console.log('Datos guardados en SharePoint');
 
             // Eliminar carpeta temporal
@@ -471,6 +492,16 @@ const httpProveedor = {
 
             const existingDocs = proveedor.Documentos || [];
 
+            // Leer tiposDocumentos del body (si existe)
+            let tiposDocumentos = [];
+            if (req.body.tiposDocumentos) {
+                try {
+                    tiposDocumentos = JSON.parse(req.body.tiposDocumentos);
+                } catch (e) {
+                    console.warn('Error al parsear tiposDocumentos:', e)
+                }
+            }
+
             const {
                 NIT,
                 DV,
@@ -526,8 +557,11 @@ const httpProveedor = {
             if (req.files && req.files.length > 0) {
                 nuevosDocs = req.files.map((file, index) => {
                     const nombreGuardado = `${uploadTimestamp}-${index}-${file.originalname}`;
+                    // Buscar el tipo correspondiente en tiposDocumentos según el indice
+                    const tipoInfo = tiposDocumentos.find(t => t.index === index);
+                    const tipo = tipoInfo ? tipoInfo.tipo : 'Documento adjunto';
                     return {
-                        tipo: '',
+                        tipo: tipo,
                         nombre: nombreGuardado,
                         nombreOriginal: file.originalname,
                         url: `${process.env.BACKEND_URL || `https://${req.get('host')}`}/api/proveedor/${proveedor.RazonSocial}/documentos/${encodeURIComponent(nombreGuardado)}`
@@ -536,7 +570,7 @@ const httpProveedor = {
             }
 
             // Combinar documentos existentes + nuevos
-            const todosDocs = [...existingDocs, ...nuevosDocs];
+            const todosDocs = nuevosDocs;
 
             // Actualizar el proveedor y cambiar estado a "Actualizado"
             const updateData = {
@@ -612,7 +646,7 @@ const httpProveedor = {
                 });
             }
 
-            const anioObjetivo = (new Date().getFullYear() + 1).toString(); // o el año siguiente
+            const anioObjetivo = new Date().getFullYear().toString(); // o el año siguiente
             // Generar token único
             const crypto = await import('crypto');
             const tokenActualizacion = crypto.default.randomBytes(32).toString('hex');
