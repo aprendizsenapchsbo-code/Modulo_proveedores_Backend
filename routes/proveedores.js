@@ -9,7 +9,7 @@ const routes = Router();
 routes.get("/", validarJWT, esAdmin, httpProveedor.getProveedores)
 routes.get("/actualizacion/:token", httpProveedor.getProveedorByUpdateToken)
 routes.get("/:razonSocial", validarJWT, esAdmin, httpProveedor.getProveedorId)
-routes.get("/:razonSocial/documentos/:nombre", validarJWT, httpProveedor.obtenerDocumentos)
+routes.get("/:razonSocial/documentos/:nombre", /* validarJWT, */ httpProveedor.obtenerDocumentos)
 routes.get("/verificar-token/:token", httpProveedor.verificarToken)
 
 // Rutas Post

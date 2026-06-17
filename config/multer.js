@@ -12,13 +12,16 @@ const fileFilter = (req, file, cb) => {
     });
     
     const validMimes = ['application/pdf', 'application/x-pdf', 'application/octet-stream'];
-    // Solo se permite archivos .pdf
-    const isMimeValid = validMimes.includes(file.mimetype) || file.mimetype.includes('pdf');
-
+    
     const ext = file.originalname.split('.').pop().toLowerCase();
-    const isExtValid = ext === 'pdf';
-
-    if(isMimeValid && isExtValid) {
+    const isExtValid = (ext === 'pdf' /* || ext === 'xlsx' || ext === 'xls' */);
+    const isMimeValid = (
+        file.mimetype === 'application/pdf' /* ||
+        file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || // .xlsx
+        file.mimetype === 'application/vnd.ms-excel' // .xls */
+    );
+    
+    if(isExtValid && isMimeValid) {
         console.log('✅ Archivo aceptado por multer');
         cb(null, true);
     } else {
