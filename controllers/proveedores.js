@@ -1,10 +1,6 @@
 import sharePointService from '../services/sharePointServices.js';
-// import Invitacion from "../models/invitacion.js";
-import { enviarCorreoRegistro, enviarCorreoRevisionEmpresa, enviarCorreoAprobacion, enviarCorreoRechazar } from "../services/emailService.js";
-import { enviarCorreoActualizacion } from "../services/emailServiceActualizacion.js";
+import { enviarCorreoRegistro, enviarCorreoActualizacion, enviarCorreoRevisionEmpresa, enviarCorreoAprobacion, enviarCorreoAprobacionActualizacion, enviarCorreoRechazar } from "../services/emailService.js";
 import { buffer } from 'stream/consumers';
-/* import path from 'path';
-import fs from 'fs'; */
 
 function obtenerTiposDocumentosRequeridos(tipoContribuyente) {
     if (tipoContribuyente === 'Persona Jurídica') {
@@ -617,6 +613,14 @@ const httpProveedor = {
             // Obtener el proveedor actualizado
             const proveedorActualizado = await sharePointService.getSupplierByRazonSocial(razonSocialFinal);
 
+            // Enviar correo a la empresa para revisión
+            try {
+                await enviarCorreoRevisionEmpresa(proveedorActualizado);
+                console.log('Correo de revisión enviado a la empresa')
+            } catch (emailError) {
+                console.error('Error al notificar a la empresa:', emailError);
+            }
+
             res.status(200).json({
                 success: true,
                 data: proveedorActualizado,
@@ -704,16 +708,20 @@ const httpProveedor = {
             }
 
             // Validar que el proveedor esté en estado "Pre-registro"
-            if (proveedor.estadoProveedor !== "Pre-registro") {
+            if (proveedor.estadoProveedor !== "Pre-registro" && proveedor.estadoProveedor !== 'Pendiente Actualización') {
                 return res.status(400).json({
                     success: false,
-                    msg: "Este proveedor ya esta registrado"
+                    msg: "Este proveedor no está en estado de Pre-registro o de Actualización pendiente"
                 });
             }
 
+            // Determinar el nuevo estado según el caso
+            const esPreRegistro = proveedor.estadoProveedor === "Pre-registro";
+            const nuevoEstado = esPreRegistro ? "Registrado" : "Actualizado";
+
             // Actualizar el estado del proveedor a "Actualizado"
             await sharePointService.updateSupplier(razonSocial, {
-                estadoProveedor: "Actualizado",
+                estadoProveedor: nuevoEstado,
                 comentarioAprobacion: comentario || null,
                 fechaAprobacion: new Date(),
                 aprobadoPor: req.usuario.nombre 
@@ -722,24 +730,25 @@ const httpProveedor = {
             // Obtener el proveedor actualizado despúes del cambio
             const proveedorActualizado = await sharePointService.getSupplierByRazonSocial(razonSocial);
 
-            // Enviar correo de aprobación al proveedor
-            try {
-                await enviarCorreoAprobacion(proveedorActualizado);
-            } catch (mailError) {
-                console.warn('Falló el envío del correo de aprobación:', mailError);
+            // Enviar correo de según el caso
+            if (esPreRegistro) {
+                await enviarCorreoAprobacion(proveedorActualizado)
+            } else {
+                await enviarCorreoAprobacionActualizacion(proveedorActualizado);
             }
+            
 
             res.status(200).json({
                 success: true,
                 data: proveedorActualizado,
-                msg: "Pre-registro aprobado exitosamente"
+                msg: esPreRegistro ? "Pre-registro aprobado exitosamente" : "Actualización aprobada exitosamente"
             });
 
         } catch (error) {
-            console.error('Error al aprobar el pre-registro:', error);
+            console.error('Error al aprobar:', error);
             res.status(500).json({
                 success: false,
-                msg: "Error al aprobar el pre-registro"
+                msg: "Error al aprobar"
             });
         }
     },
