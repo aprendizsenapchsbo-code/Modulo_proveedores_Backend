@@ -453,9 +453,15 @@ class SharePointService {
             if (!existing) {
                 throw new Error(`Proveedor con Razón Social ${razonSocial} no encontrado`);
             }
+
+            let anioFinal = anio;
+            if (!anioFinal) {
+                // Intentar obtener el año más reciente de la carpeta del proveedor
+                anioFinal = await this.getLatestYear(razonSocial);
+            }
     
             const merged = { ...existing, ...updateData, updateAt: new Date().toISOString() };
-            return await this.saveSupplierData(merged, files, anio);
+            return await this.saveSupplierData(merged, files, anioFinal);
         } catch (error) {
             console.error('Error no se pudo actualizar el proveedor:', error.message);
             throw error;
