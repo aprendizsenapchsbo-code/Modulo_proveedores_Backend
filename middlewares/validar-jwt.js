@@ -1,5 +1,3 @@
-// import users from "../models/users.js";
-// import { validationResult } from "express-validator";
 import jwt from "jsonwebtoken";
 import usersServices from "../services/usersServices.js";
 

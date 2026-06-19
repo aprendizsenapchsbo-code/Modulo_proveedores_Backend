@@ -183,7 +183,7 @@ const httpProveedor = {
                 estado: 'Invitación_enviada',
                 tokenRegistro: token
             };
-            const anioPreRegistro = process.env.PREREGISTRO_ANIO_BASE || new Date().getFullYear().toString();
+            const anioPreRegistro = new Date().getFullYear().toString();
             
             // Guardar el registro inicial en el SharePoint
             await sharePointService.saveSupplierData(supplierData, null, anioPreRegistro);
@@ -344,7 +344,7 @@ const httpProveedor = {
                     savedName: nombreGuardado
                 };
             });
-            const anioPreRegistro = process.env.PREREGISTRO_ANIO_BASE || new Date().getFullYear().toString();
+            const anioPreRegistro = new Date().getFullYear().toString();
 
             await sharePointService.saveSupplierData(proveedorCompleto, filesWithBuffers, anioPreRegistro);
             console.log('Datos guardados en SharePoint');

@@ -1,6 +1,4 @@
 import axios from "axios";
-/* import fs from 'fs'
-import path from "path"; */
 import authService from "./authService.js";
 
 /* Servicio para gestionar documentos en el SharePoint, se encarga de crear carpetas y de subir los documentos */

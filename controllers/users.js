@@ -1,5 +1,3 @@
-// import users from "../models/users.js";
-// import { generarJWT } from "../middlewares/validar-jwt.js";
 import usersServices from "../services/usersServices.js";
 import jwt from 'jsonwebtoken';
 import bcrypt from "bcrypt";
