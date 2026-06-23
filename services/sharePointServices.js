@@ -163,7 +163,7 @@ class SharePointService {
     }
 
     sanitize(str) {
-        return str.toString().replace(/[^a-zA-Z0-9]/g, '_');
+        return str.toString().trim().replace(/[^a-zA-Z0-9]/g, '_');
     }
 
     // Obtener el año mas reciente de un proveedor (para el dashboard)
