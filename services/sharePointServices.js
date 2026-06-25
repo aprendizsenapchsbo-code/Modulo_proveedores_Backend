@@ -152,7 +152,7 @@ class SharePointService {
     // ------------------PROVEEDORES------------------
     // Obtener el ID de la subcarpeta "Proveedores"
     getSupplierFolderPath(razonSocial, anio = null) {
-        const sanitized = razonSocial.toString().replace(/[^a-zA-Z0-9]/g, '_');
+        const sanitized = razonSocial.toString().trim().replace(/[^a-zA-Z0-9]/g, '_');
         const anioFolder = anio ? anio.toString() : this.getCurrentYear();
         return `${this.basePath}/${this.suppliersFolder}/Proveedor_${sanitized}/${anioFolder}`;
     }
@@ -169,6 +169,7 @@ class SharePointService {
     // Obtener el año mas reciente de un proveedor (para el dashboard)
     async getLatestYear(razonSocial) {
         const baseFolder = `${this.basePath}/${this.suppliersFolder}/Proveedor_${this.sanitize(razonSocial)}`;
+        console.log('baseFolder:', baseFolder)
         const siteId = await this.getSiteId();
         const driveId = await this.getDriveId();
         const token = await authService.getAccessToken();
@@ -310,8 +311,10 @@ class SharePointService {
     async getSupplierByRazonSocial(razonSocial) {
         try {
             const latestYear = await this.getLatestYear(razonSocial);
+            console.log('latestYear:', latestYear);
             if (!latestYear) return null;
             const folderPath = this.getSupplierFolderPath(razonSocial, latestYear);
+            console.log('folderPath:', folderPath);
             const jsonPath = `${folderPath}/datos_proveedor.json`;
             const siteId = await this.getSiteId();
             const driveId = await this.getDriveId();
