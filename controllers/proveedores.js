@@ -2,22 +2,48 @@ import sharePointService from '../services/sharePointServices.js';
 import { enviarCorreoRegistro, enviarCorreoActualizacion, enviarCorreoRevisionEmpresa, enviarCorreoAprobacion, enviarCorreoAprobacionActualizacion, enviarCorreoRechazar } from "../services/emailService.js";
 import { buffer } from 'stream/consumers';
 
-function obtenerTiposDocumentosRequeridos(tipoContribuyente) {
-    if (tipoContribuyente === 'Persona Jurídica') {
-        return [
-            'COPIA DE RUT COMPLETO',
-            'COPIA DE CAMARA COMERCIO VIGENTE (Menor a 90 días)',
-            'COPIA DE DOCUMENTO DE IDENTIFICACION DEL REPRESENTANTE LEGAL',
-            'CERTIFICACION BANCARIA',
-            '2 CERTIFICADOS COMERCIALES',
-            'ESTADOS FINANCIEROS COMPARATIVOS DE LOS (2) ULTIMOS AÑOS'
+function obtenerTiposDocumentosRequeridos(TipoContribuyente, Pais) {
+    /* PROVEEDOR DEL EXTERIOR */
+    if (Pais !== 'Colombia') {
+        // Documentos base comunes para ambos tipos
+        const documentosBase = [
+            'IDENTIFICACION TRIBUTARIA DEL PAIS ORIGEN (EIN, RFC, VAT ID)',
+            'CERTIFICACION BANCARIA (Con SWIFT / BIC / IBAN)',
         ];
-    } else if (tipoContribuyente === 'Persona Natural') {
-        return [
-            'COPIA DE RUT COMPLETO',
-            'COPIA DE DOCUMENTO DE IDENTIFICACION DEL RESPRESENTANTE LEGAL',
-            'CERTIFICACIÓN BANCARIA'
-        ];
+
+        if (TipoContribuyente === 'Persona Jurídica') {
+            return [
+                ...documentosBase,
+                'CERTIFICADO DE EXISTENCIA Y REPRESENTACION LEGAL O EQUIVALENTE AL PAIS',
+                'COPIA DEL PASAPORTE DEL REPRESENTANTE LEGAL',
+                'ESTADOS FINANCIEROS'
+            ];
+        } else if (TipoContribuyente === 'Persona Natural') {
+            return [
+                ...documentosBase,
+                'COPIA DEL PASAPORTE O DOCUMENTO DE IDENTIDAD',
+                'DECLARACIÓN JURADA DE INGRESOS (si aplica)'
+            ];
+        }
+    }
+    /* PROVEEDOR NACIONAL */
+    if (Pais === 'Colombia'){
+        if (TipoContribuyente === 'Persona Jurídica') {
+            return [
+                'COPIA DE RUT COMPLETO',
+                'COPIA DE CAMARA COMERCIO VIGENTE (Menor a 90 días)',
+                'COPIA DE DOCUMENTO DE IDENTIFICACION DEL REPRESENTANTE LEGAL',
+                'CERTIFICACION BANCARIA',
+                '2 CERTIFICADOS COMERCIALES',
+                'ESTADOS FINANCIEROS COMPARATIVOS DE LOS (2) ULTIMOS AÑOS'
+            ];
+        } else if (TipoContribuyente === 'Persona Natural') {
+            return [
+                'COPIA DE RUT COMPLETO',
+                'COPIA DE DOCUMENTO DE IDENTIFICACION DEL REPRESENTANTE LEGAL',
+                'CERTIFICACIÓN BANCARIA'
+            ];
+        }
     }
     return [];
 }
@@ -50,9 +76,11 @@ const httpProveedor = {
     getProveedorId: async (req, res) => {
         try {
             const { razonSocial } = req.params; // Se espera que el id sea el la Razón Social
-            console.log('Proveedor encontrado: ', razonSocial)
 
-            const proveedor = await sharePointService.getSupplierByRazonSocial(razonSocial);
+            const razonSocialLimpia = razonSocial ? razonSocial.trim() : '';
+            console.log('Buscando proveedor con razón social: ', razonSocialLimpia)
+
+            const proveedor = await sharePointService.getSupplierByRazonSocial(razonSocialLimpia);
             if (!proveedor) {
                 return res.status(404).json({
                     success: false,
@@ -231,8 +259,12 @@ const httpProveedor = {
                 proveedorData = req.body;
             }
             console.log('Datos recibidos:', proveedorData);
+            if (proveedorData.RazonSocial) {
+                proveedorData.RazonSocial = proveedorData.RazonSocial.trim();
+            };
             const { token } = req.params;
             const { 
+                Pais,
                 NIT,
                 DV,
                 RazonSocial,
@@ -289,12 +321,16 @@ const httpProveedor = {
             }
 
             // Obtener tipos de documentos según tipo de contribuyente
-            const tiposRequeridos = obtenerTiposDocumentosRequeridos(TipoContribuyente);
+            const tiposRequeridos = obtenerTiposDocumentosRequeridos(TipoContribuyente, Pais);
 
-            if (req.files.length < tiposRequeridos.length) {
+            // Verificar que se hayan subido los mismos tipos
+            const tiposSubidos = req.files.map((file, index) => tiposRequeridos[index] || 'Desconocido');
+
+            const faltantes = tiposRequeridos.filter(t => !tiposSubidos.includes(t));
+            if (faltantes.length > 0) {
                 return res.status(400).json({
                     success: false,
-                    msg: `Debe subir ${tiposRequeridos.length} documentos`
+                    msg: `Debe subir ${faltantes.join(', ')}`
                 });
             }
             
@@ -499,6 +535,7 @@ const httpProveedor = {
             }
 
             const {
+                Pais,
                 NIT,
                 DV,
                 RazonSocial: nuevaRazonSocial, // nueva razón social si cambia
@@ -570,6 +607,7 @@ const httpProveedor = {
 
             // Actualizar el proveedor y cambiar estado a "Actualizado"
             const updateData = {
+                Pais,
                 NIT,
                 DV,
                 RazonSocial: razonSocialFinal,
@@ -820,7 +858,7 @@ const httpProveedor = {
         try {
             const { razonSocial } = req.params;
 
-            await sharePointService.deleteSupplier(razonSocial);
+            await sharePointService.deleteSupplier(razonSocial.trim());
 
             res.status(200).json({
                 success: true,
