@@ -27,7 +27,7 @@ function obtenerTiposDocumentosRequeridos(TipoContribuyente, Pais) {
         }
     }
     /* PROVEEDOR NACIONAL */
-    if (Pais === 'Colombia'){
+    if (Pais === 'Colombia' || Pais === 'COLOMBIA' || Pais === 'colombia'){
         if (TipoContribuyente === 'Persona Jurídica') {
             return [
                 'COPIA DE RUT COMPLETO',
