@@ -3,8 +3,12 @@ import { enviarCorreoRegistro, enviarCorreoActualizacion, enviarCorreoRevisionEm
 import { buffer } from 'stream/consumers';
 
 function obtenerTiposDocumentosRequeridos(TipoContribuyente, Pais) {
+    // Normalizar: convertir a minusculas y eliminar espacios
+    const paisNormalizado = Pais?.trim().toLowerCase() || '';
+    const esColombia = paisNormalizado === 'colombia';
+
     /* PROVEEDOR DEL EXTERIOR */
-    if (Pais !== 'Colombia' || Pais !== 'COLOMBIA' || Pais !== 'colombia') {
+    if (!esColombia) {
         // Documentos base comunes para ambos tipos
         const documentosBase = [
             'IDENTIFICACION TRIBUTARIA DEL PAIS ORIGEN (EIN, RFC, VAT ID)',
@@ -27,7 +31,7 @@ function obtenerTiposDocumentosRequeridos(TipoContribuyente, Pais) {
         }
     }
     /* PROVEEDOR NACIONAL */
-    if (Pais === 'Colombia' || Pais === 'COLOMBIA' || Pais === 'colombia'){
+    if (esColombia){
         if (TipoContribuyente === 'Persona Jurídica') {
             return [
                 'COPIA DE RUT COMPLETO',
