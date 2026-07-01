@@ -4,7 +4,7 @@ import { buffer } from 'stream/consumers';
 
 function obtenerTiposDocumentosRequeridos(TipoContribuyente, Pais) {
     /* PROVEEDOR DEL EXTERIOR */
-    if (Pais !== 'Colombia') {
+    if (Pais !== 'Colombia' || Pais !== 'COLOMBIA' || Pais !== 'colombia') {
         // Documentos base comunes para ambos tipos
         const documentosBase = [
             'IDENTIFICACION TRIBUTARIA DEL PAIS ORIGEN (EIN, RFC, VAT ID)',
