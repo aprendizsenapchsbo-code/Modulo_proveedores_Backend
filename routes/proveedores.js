@@ -21,7 +21,7 @@ routes.post("/rechazar/pre-registro/:razonSocial", validarJWT, esAdmin, httpProv
 // Rutas Put
 routes.put("/:razonSocial/solicitar-actualizacion", validarJWT, esAdmin, httpProveedor.solicitarActualizacion)
 routes.put("/:token/actualizar-datos", upload.array('documentos', 10), httpProveedor.actualizarDatosProveedor)
-routes.put("/:RazonSocial", validarJWT, esAdmin, httpProveedor.actualizarProveedor)
+routes.put("/:RazonSocial", validarJWT, esAdmin, upload.array('documentos', 10), httpProveedor.actualizarProveedor)
 
 // Rutas Delete
 routes.delete("/:razonSocial", validarJWT, esAdmin, httpProveedor.eliminarProveedor)

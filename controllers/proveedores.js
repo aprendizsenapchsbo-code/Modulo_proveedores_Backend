@@ -2,6 +2,18 @@ import sharePointService from '../services/sharePointServices.js';
 import { enviarCorreoRegistro, enviarCorreoActualizacion, enviarCorreoRevisionEmpresa, enviarCorreoAprobacion, enviarCorreoAprobacionActualizacion, enviarCorreoRechazar } from "../services/emailService.js";
 import { buffer } from 'stream/consumers';
 
+// Función auxiliar para limpiar nombres de archivo para SharePoint
+const sanitizeFileName = (fileName) => {
+    if (!fileName) return 'documento.pdf';
+    let clean = fileName
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Eliminar acentos
+        .replace(/[~#%&*{}\\:<>?/|"\s]/g, '_') // Caracteres prohibidos
+        .replace(/[^a-zA-Z0-9._-]/g, '');  // Solo alfanumericos, puntos y guiones
+
+    if (!clean.toLowerCase().endsWith('.pdf')) clean += '.pdf';
+    return clean.substring(0, 100);
+}
+
 function obtenerTiposDocumentosRequeridos(TipoContribuyente, Pais) {
     // Normalizar: convertir a minusculas y eliminar espacios
     const paisNormalizado = Pais?.trim().toLowerCase() || '';
@@ -56,19 +68,23 @@ const httpProveedor = {
     getProveedores: async (req, res) => {
         try {
             console.log('🔍 [GET /api/proveedor] - Iniciando petición');
+            const limit = parseInt(req.query.limit) || 20;
+            const skipToken = req.query.skipToken || null;
             
-            const proveedores = await sharePointService.getAllSuppliers();
+            const resultado = await sharePointService.getAllSuppliers(limit, skipToken);
             console.log('📋 Buscando proveedores en SharePoint...');
 
-            res.json({
+            res.status(200).json({
                 success: true,
-                data: proveedores,
-                count: proveedores.length,
+                data: resultado.data,
+                count: resultado.data.length,
+                hasMore: resultado.hasMore,
+                nextSkipToken: resultado.nextSkipToken,  // Solo el token
                 mensaje: 'Búsqueda en SharePoint en desarrollo'
             });
 
         } catch (error) {
-            console.error('❌ Error en obtener los proveedores:', error);
+            console.error('❌ Error en obtener los proveedores:', error.message);
             res.status(500).json({
                 success: false,
                 msg: "Error al buscar los proveedores",
@@ -351,7 +367,8 @@ const httpProveedor = {
             const uploadTimestamp = Date.now();
 
             const documentosGuardados = req.files.map((f, index) => {
-                const nombreGuardado = `${uploadTimestamp}-${index}-${f.originalname}`;
+                const nombreSeguro = sanitizeFileName(f.originalname);
+                const nombreGuardado = `${uploadTimestamp}-${index}-${nombreSeguro}`;
                 return {
                     tipo: tiposRequeridos[index] || 'Documento adjunto',
                     nombre: nombreGuardado,
@@ -376,14 +393,11 @@ const httpProveedor = {
             };
 
             // Actualizar en SharePoint (usuando NIT como identificador)
-            const filesWithBuffers = req.files.map((f, index) => {
-                const nombreGuardado = `${uploadTimestamp}-${index}-${f.originalname}`;
-                return {
-                    buffer: f.buffer,
-                    originalname: f.originalname,
-                    savedName: nombreGuardado
-                };
-            });
+            const filesWithBuffers = req.files.map((f, index) => ({
+                buffer: f.buffer,
+                originalname: f.originalname,
+                savedName: documentosGuardados[index].nombre  // Usar nombre ya sanitizado
+            }));
             const anioPreRegistro = new Date().getFullYear().toString();
 
             await sharePointService.saveSupplierData(proveedorCompleto, filesWithBuffers, anioPreRegistro);
@@ -425,7 +439,32 @@ const httpProveedor = {
     actualizarProveedor: async (req, res) => {
         try {
             const { RazonSocial } = req.params;
-            const  datosActualizar  = req.body;
+            // let  datosActualizar  = req.body;
+            let datosActualizar = req.body;
+
+            /* if(req.body.datosProveedor) {
+                try {
+                    datosActualizar = JSON.parse(req.body.datosProveedor);
+                } catch (e) {
+                    console.warn('Error al parsear datosProveedor:', e);
+                }
+            } */
+
+           // Manejo flexible de datos (JSON o FormData)
+           if (req.headers['content-type']?.includes('multipart/form-data')) {
+            if (req.body.datosProveedor) {
+                try {
+                    datosActualizar = JSON.parse(req.body.datosProveedor);
+                } catch (e) {
+                    console.warn('Error parseando datosProveedor en FormData', e);
+                    datosActualizar = req.body;
+                }
+            } else {
+                datosActualizar = req.body;
+            }
+           } else {
+            datosActualizar = req.body;
+           }
 
             // Validar que el admin esté autenticado
             if(req.usuario.rol !== 'admin'){
@@ -435,8 +474,9 @@ const httpProveedor = {
                 });
             }
 
-            console.log('Actualizando proveedor en SharePoint');
-            console.log(`Razón Social ${RazonSocial}`)
+            const razonSocialLimpia = RazonSocial.trim();
+            console.log(`Actualizando proveedor en SharePoint: ${razonSocialLimpia}`);
+            // console.log(`Razón Social ${RazonSocial}`)
 
             // Validar que el proveedor exista
             const proveedorExistente = await sharePointService.getSupplierByRazonSocial(RazonSocial);
@@ -475,11 +515,63 @@ const httpProveedor = {
                 updateAt: new Date().toISOString()
             }
 
+            //Procesar archivos si se enviaron
+            /*let filesWithBuffers = null;
+             if (req.files && req.files.length > 0) {
+                const uploadTimestamp = Date.now();
+
+                filesWithBuffers = req.files.map((file, index) => {
+                    const nombreGuardado = `${uploadTimestamp}-admin-${index}-${file.originalname}`;
+                    return {
+                        buffer: file.buffer,
+                        originalname: file.originalname,
+                        savedName: nombreGuardado
+                    };
+                });
+
+                // Crear el array de Documentos (reemplaza los existentes)
+                const nuevosDocs = filesWithBuffers.map((f, i) => ({
+                    tipo: req.body.tiposDocumentos?.[i] || 'Documento adjunto',
+                    nombre: f.savedName,
+                    nombreOriginal: f.originalname,
+                    url: `${process.env.BACKEND_URL || `https://${req.get('host')}`}/api/proveedor/${encodeURIComponent(datosActualizar.RazonSocial || RazonSocial)}/documentos/${encodeURIComponent(f.savedName)}`
+                }));
+
+                const docsExistentes = proveedorExistente.Documentos || [];
+                updateData.Documentos = [...docsExistentes, ...nuevosDocs];
+            } */
+
+            // Procesamiento de Archivos (si existen)
+            let filesWithBuffers = null;
+            if (req.files && req.files.length > 0) {
+                const uploadTimestamp = Date.now();
+
+                filesWithBuffers = req.files.map((file, index) => {
+                    const nombreSeguro = sanitizeFileName(file.originalname);
+                    return {
+                        buffer: file.buffer,
+                        originalname: file.originalname,
+                        savedName: `${uploadTimestamp}-admin-${index}-${nombreSeguro}`
+                    };
+                });
+
+                // Actualizar array de documentos en el JSON
+                const docsExistentes = proveedorExistente.Documentos || [];
+                const nuevosDocs = filesWithBuffers.map(f => ({
+                    tipo: 'Documento Adicional (Admin)',
+                    nombre: f.savedName,
+                    nombreOriginal: f.originalname,
+                    url: `${process.env.BACKEND_URL || `https://${req.get('host')}`}/api/proveedor/${encodeURIComponent(proveedorExistente.RazonSocial)}/documentos/${encodeURIComponent(f.savedName)}`
+                }));
+
+                updateData.Documentos = [...docsExistentes, ...nuevosDocs];
+            }
+
             // Actualizar el proveedor en SharePoint
-            await sharePointService.updateSupplier(RazonSocial, updateData);
+            await sharePointService.updateSupplier(razonSocialLimpia, updateData, filesWithBuffers);
 
             // Obtener el proveedor actualizado (el NIT pudo haber cambiado)
-            const nuevoNit = datosActualizar.RazonSocial || RazonSocial;
+            const nuevoNit = datosActualizar.RazonSocial || razonSocialLimpia;
             const proveedorActualizado = await sharePointService.getSupplierByRazonSocial(nuevoNit);
 
             if (updateData.estadoProveedor === 'Registrado') {
@@ -500,7 +592,8 @@ const httpProveedor = {
             console.error('Error al actualizar el proveedor:', error);
             res.status(500).json({
                 success: false,
-                msg: "Error al actualizar el proveedor"
+                msg: "Error interno al actualizar",
+                error: error.message
             });
         }
     },
@@ -593,7 +686,8 @@ const httpProveedor = {
             const uploadTimestamp = Date.now();
             if (req.files && req.files.length > 0) {
                 nuevosDocs = req.files.map((file, index) => {
-                    const nombreGuardado = `${uploadTimestamp}-${index}-${file.originalname}`;
+                    const nombreSeguro = sanitizeFileName(file.originalname);
+                    const nombreGuardado = `${uploadTimestamp}-${index}-${nombreSeguro}`;
                     // Buscar el tipo correspondiente en tiposDocumentos según el indice
                     const tipoInfo = tiposDocumentos.find(t => t.index === index);
                     const tipo = tipoInfo ? tipoInfo.tipo : 'Documento adjunto';
