@@ -227,39 +227,61 @@ class SharePointService {
         // Subir documentos desde buffers
         if (files && Array.isArray(files) && files.length > 0) {
             for (const file of files) {
-                const fileName = file.savedName;
-                const filePathUrl = `${folderPath}/${fileName}`;
+                // Validar que el archivo tenga buffer
+                if (!file.buffer) {
+                    console.warn(`Archivo sin buffer omitido: ${file.originalname}`);
+                    continue;
+                }
+
+                // Sanitizar nombre para evitar error 400 en SharePoint
+                const safeFileName = file.savedName
+                    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")  // Eliminar acentos
+                    .replace(/[^\w.-]/g, '_'); // Reemplazar caracteres especiales
+                const filePathUrl = `${folderPath}/${safeFileName}`;
                 const encodedFile = this.encodedPath(filePathUrl);
                 const fileUrl = `${this.graphApiUrl}/sites/${siteId}/drives/${driveId}/root:/${encodedFile}:/content`;
 
-                await axios.put(fileUrl, file.buffer, {
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                        'Content-Type': 'application/octet-stream'
-                    }
-                });
-                console.log(`Documento subido ${fileName}`)
+                try {
+                    await axios.put(fileUrl, file.buffer, {
+                        headers: {
+                            Authorization: `Bearer ${token}`,
+                            'Content-Type': 'application/octet-stream'
+                        }
+                    });
+                    console.log(`Documento subido ${safeFileName}`)
+                } catch (uploadErr) {
+                    console.error(`Error al subir ${safeFileName}:`, uploadErr.message);
+                }
             }
         }
-        return { succes: true, folderPath };
+        return { success: true, folderPath };
     }
 
     // Obtener todos los proveedores (recorre todas las carpetas y lee los JSON)
-    async getAllSuppliers() {
+    async getAllSuppliers(limit = 20, skipToken = null) {
         try {
+            console.log('skipToken recibido:', skipToken)
             const supplierBase = `${this.basePath}/${this.suppliersFolder}`;
             const siteId = await this.getSiteId();
             const driveId = await this.getDriveId();
             const token = await authService.getAccessToken();
+            const encodedPath = this.encodedPath(supplierBase);
+            
+            let url = `${this.graphApiUrl}/sites/${siteId}/drives/${driveId}/root:/${encodedPath}:/children?$top=${limit}`;
+            if (skipToken) {
+                url += `&$skiptoken=${skipToken}`;
+            }
+    
+            console.log('URL a Graph:', url)
+            // const folderId = await this.getFolderId(supplierBase);
 
-            const folderId = await this.getFolderId(supplierBase);
-            const childrenUrl = `${this.graphApiUrl}/sites/${siteId}/drives/${driveId}/items/${folderId}/children`;
-
-            const response = await axios.get(childrenUrl, {
+            const response = await axios.get(url, {
                 headers: {
                     Authorization: `Bearer ${token}`
                 }
             });
+
+            console.log('@odata.nextLink en respuesta:', response.data['@odata.nextLink'] || 'NO HAY');
             
             const proveedores = [];
             for (const item of response.data.value) {
@@ -299,7 +321,26 @@ class SharePointService {
                     }
                 }
             }
-            return proveedores;
+            // Extraer el skipToken de la siguiente página si existe
+            const nextLink = response.data['@odata.nextLink'] || null;
+            let nextSkipToken = null;
+            if (nextLink) {
+                try {
+                    const urlObj = new URL(nextLink);
+                    nextSkipToken = urlObj.searchParams.get('$skiptoken');
+                } catch (e) {
+                    // Si falla, intenta extraer manualmente
+                    const match = nextLink.match(/[?&]$skiptoken=([^&]+)/);
+                    if (match) nextSkipToken = match[1];
+                }
+            }
+
+            return {
+                data: proveedores,
+                hasMore: !!nextLink,
+                nextLink: nextLink,   // URL completa
+                nextSkipToken: nextSkipToken // Solo el token
+            };
             
         } catch (error) {
             console.error('Error al obtener todos los proveedores:', error.message);
@@ -396,7 +437,10 @@ class SharePointService {
     // Verificar que la carpeta del proveedor ya exista
     async getSupplierByToken(token) {
         console.log(`Buscando token: ${token}`)
-        const all = await this.getAllSuppliers();
+        const resultado = await this.getAllSuppliers();
+
+        // Acceder a resultado.data
+        const all = Array.isArray(resultado) ? resultado : (resultado.data || [])
         console.log('Proveedores encontrados:', all.length);
 
         const found = all.find(s => {
@@ -414,8 +458,10 @@ class SharePointService {
     // Servicio para encontrar el token que va en el link magico al solicitar actualización al proveedor
     async getSupplierByUpdateToken(token) {
         console.log(`buscando token de actualización: ${token}`);
-        const todosProveedores = await this.getAllSuppliers();
+        const resultado = await this.getAllSuppliers();
         
+        const todosProveedores = Array.isArray(resultado) ? resultado : (resultado.data || []);
+
         const found = todosProveedores.find(s => 
             s.tokenActualizacion === token
         );
@@ -436,7 +482,9 @@ class SharePointService {
     async getSupplierByEmail(email) {
         const normalizedEmail = email.toLowerCase();
         console.log(`Buscando email: ${normalizedEmail}`)
-        const all = await this.getAllSuppliers();
+        const resultado = await this.getAllSuppliers();
+
+        const all = Array.isArray(resultado) ? resultado : (resultado.data || []);
         console.log('Proveedores encontrados:', all.length);
 
         const found = all.find(e =>  e.CorreoElectronico?.toLowerCase() === normalizedEmail );
