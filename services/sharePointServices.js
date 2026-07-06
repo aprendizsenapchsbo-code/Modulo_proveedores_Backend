@@ -258,7 +258,7 @@ class SharePointService {
     }
 
     // Obtener todos los proveedores (recorre todas las carpetas y lee los JSON)
-    async getAllSuppliers(limit = 20, skipToken = null) {
+    async getAllSuppliers(limit = 0, skipToken = null) {
         try {
             console.log('skipToken recibido:', skipToken)
             const supplierBase = `${this.basePath}/${this.suppliersFolder}`;
