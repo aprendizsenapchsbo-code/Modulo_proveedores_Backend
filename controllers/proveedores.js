@@ -229,7 +229,8 @@ const httpProveedor = {
                 CorreoElectronico,
                 fechaRegistroInicial: new Date().toISOString(),
                 estado: 'Invitación_enviada',
-                tokenRegistro: token
+                tokenRegistro: token,
+                tokenRegistroExpiracion: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString()
             };
             const anioPreRegistro = new Date().getFullYear().toString();
             
@@ -796,7 +797,7 @@ const httpProveedor = {
             await sharePointService.updateSupplier(razonSocial, {
                 tokenActualizacion: tokenActualizacion,
                 estadoProveedor: "Pendiente Actualización",
-                tokenActualizacionExpiracion: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 días
+                tokenActualizacionExpiracion: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString(), // 15 días
                 anioActualizacionPendiente: anioObjetivo
             });
             
