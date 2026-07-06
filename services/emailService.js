@@ -90,7 +90,7 @@ export const enviarCorreoRegistro = async (CorreoElectronico, token) => {
     
             <p>Una vez finalizado, su información será evaluada para continuar con el proceso de vinculación.</p>
     
-            <p><strong>Nota:</strong> Este enlace es válido por 7 días. Si presenta inconvenientes, puede responder a este correo.</p>
+            <p><strong>Nota:</strong> Este enlace es válido por 15 días. Si presenta inconvenientes, puede responder a este correo.</p>
     
             <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
             <p style="color: #666; font-size: 12px;">
@@ -337,7 +337,7 @@ export const enviarCorreoActualizacion = async (CorreoElectronico, tokenActualiz
                 </ul>
         
                 <p style="color: #d9534f; font-weight: bold;">
-                    ⚠️ Por favor completar esta actualización en los próximos 10 días.
+                    ⚠️ Por favor completar esta actualización en los próximos 15 días.
                 </p>
         
                 <p style="color: #666; font-size: 14px;">
