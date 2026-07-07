@@ -123,6 +123,65 @@ const httpProveedor = {
         }
     },
 
+    solicitarUrlsCarga: async (req, res) => {
+        try {
+            const { token } = req.params;
+            const { archivos } = req.body;  // [{ nombreOriginal, tipo }]
+
+            // Validar token (usar el mismo método que en completarRegistro)
+            const preRegistro = await sharePointService.getSupplierByToken(token);
+            if (!preRegistro) {
+                return res.status(404).json({
+                    success: false,
+                    msg: "Token inválido o expirado"
+                });
+            }
+
+            // Validar que el número de archivos coincida
+            if (!archivos || archivos.length !== tiposRequeridos.length) {
+                return res.status(400).json({
+                    success: false,
+                    msg: `Debe subir exactamente ${tiposRequeridos.length} archivos: ${tiposRequeridos.join(', ')}`
+                });
+            }
+
+           /*  // Validar que los tipos enviados coincidan con los requeridos (según índice)
+
+            for (let i = 0; i < tiposRequeridos.length; i++) {
+                if (archivos[i].tipo !== tiposRequeridos[i]) {
+                    return res.status(400).json({
+                        success: false,
+                        msg: `El archivo #${i + 1} debe ser de tipo: ${tiposRequeridos[i]}`
+                    });
+                }
+            } */
+
+            // Preparar carpeta del proveedor
+            const folderPath = sharePointService.getSupplierFolderPath(preRegistro.RazonSocial || preRegistro.tokenRegistro);
+            await sharePointService.ensureFolder(folderPath);
+
+            // General URLs de carga y nombres seguros
+            const uploadTimestamp = Date.now();
+            const urls = [];
+            for (let i = 0; i < archivos.length; i++) {
+                const { nombreOriginal, tipo } = archivos[i];
+                const nombreSeguro = `${uploadTimestamp}-${i}-${sanitizeFileName(nombreOriginal)}`;
+                const uploadUrl = await sharePointService.createUploadSession(folderPath, nombreSeguro);
+                urls.push({
+                    nombre: nombreSeguro,
+                    nombreOriginal,
+                    tipo,
+                    uploadUrl
+                });
+            }
+
+            res.json({ success: true, urls, folderPath });
+        } catch (error) {
+            console.error('Error al solicitar URLs de carga:', error);
+            res.status(500).json({ success: false, msg: error.message });
+        }
+    },
+
     obtenerDocumentos: async (req, res) => {
         try {
             // Validar que sea admin
@@ -285,31 +344,8 @@ const httpProveedor = {
             };
             const { token } = req.params;
             const { 
-                Pais,
-                NIT,
-                DV,
-                RazonSocial,
-                DireccionNotificacion,
-                Telefono,
-                Ciudad,
-                CorreoElectronico,
-                NombreRepresentante,
-                TipoDocumentoRepresentante,
-                NumeroIdentificacion,
-                TelefonoRepresentante,
-                CorreoElectronicoRepresentante,
-                NombreRepresentanteComercial,
-                CargoRepresentanteComercial,
-                TelefonoRepresentanteComercial,
-                CorreoElectronicoRepresentanteComercial,
-                NombresApellidosResponsable,
-                CargoResponsableFacturacion,
-                CorreoElectronicoResponsable,
-                TipoContribuyente,
-                TipoProveedor,
-                AutorizaConflictos,
-                AutorizaDatosPersonales,
-                Documentos
+                archivosSubidos,
+                ...datos
              } = proveedorData;
                 
             console.log('Completanto registro:');
@@ -333,29 +369,26 @@ const httpProveedor = {
                 });
             }
 
-            // Validar documentos si se envio
-            if(!req.files || req.files.length === 0) {
-                return res.status(400).json({
-                    success: false,
-                    msg: 'Debes subir al menos un documento'
-                })
+            // Validar que archivosSubidos tenga contenido
+            if (!archivosSubidos || !Array.isArray(archivosSubidos) || archivosSubidos.length === 0) {
+                return res.status(400).json({ success: false, msg: 'Debes subir al menos un documento' });
             }
 
+            const { TipoContribuyente, Pais, RazonSocial } = datos;
             // Obtener tipos de documentos según tipo de contribuyente
             const tiposRequeridos = obtenerTiposDocumentosRequeridos(TipoContribuyente, Pais);
 
             // Verificar que se hayan subido los mismos tipos
-            const tiposSubidos = req.files.map((file, index) => tiposRequeridos[index] || 'Desconocido');
-
+            const tiposSubidos = archivosSubidos?.map(a => a.tipo) || [];
             const faltantes = tiposRequeridos.filter(t => !tiposSubidos.includes(t));
             if (faltantes.length > 0) {
                 return res.status(400).json({
                     success: false,
-                    msg: `Debe subir ${faltantes.join(', ')}`
+                    msg: `Faltan documentos: ${faltantes.join(', ')}`
                 });
             }
             
-            // Validar que los documentos sean PDF
+            /* // Validar que los documentos sean PDF
             for (const file of req.files) {
                 if (file.mimetype !== 'application/pdf') {
                     return res.status(400).json({
@@ -363,20 +396,16 @@ const httpProveedor = {
                         msg: 'Todos los documentos deben ser PDF'
                     });
                 }
-            }
+            } */
 
             const uploadTimestamp = Date.now();
 
-            const documentosGuardados = req.files.map((f, index) => {
-                const nombreSeguro = sanitizeFileName(f.originalname);
-                const nombreGuardado = `${uploadTimestamp}-${index}-${nombreSeguro}`;
-                return {
-                    tipo: tiposRequeridos[index] || 'Documento adjunto',
-                    nombre: nombreGuardado,
-                    nombreOriginal: f.originalname,
-                    url: `${process.env.BACKEND_URL || `${req.protocol}://${req.get('host')}`}/api/proveedor/${encodeURIComponent(RazonSocial)}/documentos/${encodeURIComponent(nombreGuardado)}`
-                };
-            });
+            const documentosGuardados = archivosSubidos.map(a => ({
+                tipo: a.tipo,
+                nombre: a.nombre,
+                nombreOriginal: a.nombreOriginal,
+                url: `${process.env.BACKEND_URL || `${req.protocol}://${req.get('host')}`}/api/proveedor/${encodeURIComponent(RazonSocial || preRegistro.RazonSocial)}/documentos/${encodeURIComponent(a.nombre)}`
+            }));
 
             console.log(`NIT: ${NIT}`);
             console.log(`Razón Social: ${RazonSocial}`);
@@ -386,23 +415,26 @@ const httpProveedor = {
             // y mantener el estado como Pre-registro hasta que la empresa lo verifique
             const proveedorCompleto = {
                 ...preRegistro,
-                ...proveedorData,
+                ...datos,
                 estado: 'Invitación_usada',
                 estadoProveedor: 'Pre-registro',
                 fechaRegistroCompleto: new Date().toISOString(),
                 Documentos: documentosGuardados
             };
 
-            // Actualizar en SharePoint (usuando NIT como identificador)
+            /* // Actualizar en SharePoint (usuando NIT como identificador)
             const filesWithBuffers = req.files.map((f, index) => ({
                 buffer: f.buffer,
                 originalname: f.originalname,
                 savedName: documentosGuardados[index].nombre  // Usar nombre ya sanitizado
-            }));
-            const anioPreRegistro = new Date().getFullYear().toString();
+            })); */
+            /* const anioPreRegistro = new Date().getFullYear().toString();
 
             await sharePointService.saveSupplierData(proveedorCompleto, filesWithBuffers, anioPreRegistro);
-            console.log('Datos guardados en SharePoint');
+            console.log('Datos guardados en SharePoint'); */
+            
+            // Guardar en SharePoint (sin archivos, solo el JSON)
+            await sharePointService.saveSupplierData(proveedorCompleto, null, new Date().getFullYear().toString());
 
             // Eliminar carpeta temporal
             await sharePointService.deleteSupplierBaseFolder(token);
@@ -419,8 +451,7 @@ const httpProveedor = {
             res.status(200).json({
                 success: true,
                 data: {
-                    NIT,
-                    RazonSocial,
+                    RazonSocial: RazonSocial || preRegistro.RazonSocial,
                     CorreoElectronico: proveedorCompleto.CorreoElectronico,
                     estadoProveedor: 'Pre-registro'
                 },
@@ -429,11 +460,12 @@ const httpProveedor = {
             
         } catch (error) {
             console.error('Error al completar el registro:', error.message);
+            let mensaje = 'Error interno al guardar los datos'
             if (error.message) {
-                console.error('Status:', error.response.status);
-                console.error('Data:', JSON.stringify(error.response.data, null, 2));
+                mensaje = `Error de SharePoint: ${error.response.status} - ${JSON.stringify(error.response.data)}`;
+            } else if (error.message) {
+                mensaje = error.message;
             }
-            throw error;
         }
     },
 

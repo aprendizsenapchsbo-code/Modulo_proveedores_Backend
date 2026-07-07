@@ -14,13 +14,14 @@ routes.get("/verificar-token/:token", httpProveedor.verificarToken)
 
 // Rutas Post
 routes.post("/registro", validarJWT, esAdmin, httpProveedor.registroProveedor)
-routes.post("/registro/completar/:token", upload.array('documentos', 10), httpProveedor.completarRegistro)
+routes.post("/registro/completar-registro-carga-directa/:token", upload.array('documentos', 10), httpProveedor.completarRegistro)
+routes.post("/solicitar-urls-carga/:token", httpProveedor.solicitarUrlsCarga)
 routes.post("/aprobar/pre-registro/:razonSocial", validarJWT, esAdmin, httpProveedor.aprobarPreRegistro)
 routes.post("/rechazar/pre-registro/:razonSocial", validarJWT, esAdmin, httpProveedor.rechazarPreRegistro)
 
 // Rutas Put
 routes.put("/:razonSocial/solicitar-actualizacion", validarJWT, esAdmin, httpProveedor.solicitarActualizacion)
-routes.put("/:token/actualizar-datos", upload.array('documentos', 10), httpProveedor.actualizarDatosProveedor)
+routes.put("/:token/actualizar-datos-carga-directa", upload.array('documentos', 10), httpProveedor.actualizarDatosProveedor)
 routes.put("/:RazonSocial", validarJWT, esAdmin, upload.array('documentos', 10), httpProveedor.actualizarProveedor)
 
 // Rutas Delete
