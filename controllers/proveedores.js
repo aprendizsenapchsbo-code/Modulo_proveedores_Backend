@@ -429,10 +429,11 @@ const httpProveedor = {
             
         } catch (error) {
             console.error('Error al completar el registro:', error.message);
-            res.status(500).json({ 
-                success: false, 
-                msg: error.message 
-            });
+            if (error.message) {
+                console.error('Status:', error.response.status);
+                console.error('Data:', JSON.stringify(error.response.data, null, 2));
+            }
+            throw error;
         }
     },
 

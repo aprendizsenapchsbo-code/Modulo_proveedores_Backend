@@ -240,6 +240,7 @@ class SharePointService {
                 const filePathUrl = `${folderPath}/${safeFileName}`;
                 const encodedFile = this.encodedPath(filePathUrl);
                 const fileUrl = `${this.graphApiUrl}/sites/${siteId}/drives/${driveId}/root:/${encodedFile}:/content`;
+                console.log(`Ruta final del archivo: ${encodedFile}`);
 
                 try {
                     await axios.put(fileUrl, file.buffer, {
@@ -251,6 +252,14 @@ class SharePointService {
                     console.log(`Documento subido ${safeFileName}`)
                 } catch (uploadErr) {
                     console.error(`Error al subir ${safeFileName}:`, uploadErr.message);
+                    console.error(`Status: ${uploadErr.response?.status}`);
+                    console.error(`StatusText: ${uploadErr.response?.statusText}`);
+                    console.error(`Data:`, JSON.stringify(uploadErr.response?.data, null, 2));
+                    console.error(`Headers:`, JSON.stringify(uploadErr.response?.headers, null, 2));
+                    console.error(`URL solicitada: ${fileUrl}`);
+                    console.error(`Tamaño del buffer: ${file.buffer.length} bytes`);
+                    // Opcional para mirar el nombre original del documento
+                    console.error(`Nombre original: ${file.originalname}`);
                 }
             }
         }
