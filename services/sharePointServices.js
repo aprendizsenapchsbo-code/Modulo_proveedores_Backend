@@ -194,6 +194,27 @@ class SharePointService {
             return null;
         }
     }
+
+    // Crear una sesión de carga (upload session) en la carpeta del proveedor
+    async createUploadSession(folderPath, fileName) {
+        const siteId = await this.getSiteId();
+        const driveId = await this.getDriveId();
+        const token = await authService.getAccessToken();
+
+        const filePath = `${folderPath}/${fileName}`;
+        const encoded = this.encodedPath(filePath);
+        const url = `${this.graphApiUrl}/sites/${siteId}/drives/${driveId}/root:/${encoded}:/createUploadSession`;
+
+        const response = await axios.post(url, {
+            "@microsoft.grap.conflictBehavior": "replace"
+        }, {
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        return response.data.uploadUrl;  // La url que usará el cliente para subir el archivo
+    }
     
     // Leer el archivo JSON de metadata dentro de una carpeta de proveedor
     async saveSupplierData(supplierData, files = null, anio = null) {
@@ -224,7 +245,7 @@ class SharePointService {
             }
         });
 
-        // Subir documentos desde buffers
+        // Subir documentos desde buffers (solo si files no es null)
         if (files && Array.isArray(files) && files.length > 0) {
             for (const file of files) {
                 // Validar que el archivo tenga buffer
