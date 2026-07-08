@@ -126,7 +126,7 @@ const httpProveedor = {
     solicitarUrlsCarga: async (req, res) => {
         try {
             const { token } = req.params;
-            const { archivos } = req.body;  // [{ nombreOriginal, tipo }]
+            const { archivos, razonSocial } = req.body;  // [{ nombreOriginal, tipo }]
 
             // Validar token (usar el mismo método que en completarRegistro)
             const preRegistro = await sharePointService.getSupplierByToken(token);
@@ -157,7 +157,8 @@ const httpProveedor = {
             } */
 
             // Preparar carpeta del proveedor
-            const folderPath = sharePointService.getSupplierFolderPath(preRegistro.RazonSocial || preRegistro.tokenRegistro);
+            const identificador = razonSocial?.trim() || preRegistro.tokenRegistro;
+            const folderPath = sharePointService.getSupplierFolderPath(identificador);
             await sharePointService.ensureFolder(folderPath);
 
             // General URLs de carga y nombres seguros
