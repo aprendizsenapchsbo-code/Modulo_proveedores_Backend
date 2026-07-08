@@ -138,10 +138,10 @@ const httpProveedor = {
             }
 
             // Validar que el número de archivos coincida
-            if (!archivos || archivos.length !== tiposRequeridos.length) {
+            if (!archivos || archivos.length === 0) {
                 return res.status(400).json({
                     success: false,
-                    msg: `Debe subir exactamente ${tiposRequeridos.length} archivos: ${tiposRequeridos.join(', ')}`
+                    msg: "Debe enviar al menos un archivo"
                 });
             }
 
