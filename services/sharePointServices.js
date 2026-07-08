@@ -206,7 +206,7 @@ class SharePointService {
         const url = `${this.graphApiUrl}/sites/${siteId}/drives/${driveId}/root:/${encoded}:/createUploadSession`;
 
         const response = await axios.post(url, {
-            "@microsoft.grap.conflictBehavior": "replace"
+            "@microsoft.graph.conflictBehavior": "replace"
         }, {
             headers: {
                 Authorization: `Bearer ${token}`,

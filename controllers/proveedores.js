@@ -332,23 +332,14 @@ const httpProveedor = {
     // Completar registro del proveedor
     completarRegistro: async (req, res) => {
         try {
-            let proveedorData;
-            if (req.body.datosProveedor) {
-                proveedorData = JSON.parse(req.body.datosProveedor);
-            } else {
-                proveedorData = req.body;
-            }
-            console.log('Datos recibidos:', proveedorData);
-            if (proveedorData.RazonSocial) {
-                proveedorData.RazonSocial = proveedorData.RazonSocial.trim();
-            };
             const { token } = req.params;
             const { 
                 archivosSubidos,
                 ...datos
-             } = proveedorData;
-                
-            console.log('Completanto registro:');
+             } = req.body;
+
+             console.log('Completanto registro:');
+             console.log('datos recibidos:', datos);
             console.log(`Token: ${token.substring(0, 10)}...`);
 
             const preRegistro = await sharePointService.getSupplierByToken(token);
@@ -360,8 +351,8 @@ const httpProveedor = {
             }
 
             // Validar autorizaciones
-            const autorizaDatos = AutorizaDatosPersonales === true || AutorizaDatosPersonales === 'true';
-            const autorizaConflictos = AutorizaConflictos === true || AutorizaConflictos === 'true';
+            const autorizaDatos = datos.AutorizaDatosPersonales === true || datos.AutorizaDatosPersonales === 'true';
+            const autorizaConflictos = datos.AutorizaConflictos === true || datos.AutorizaConflictos === 'true';
             if (!autorizaDatos || !autorizaConflictos) {
                 return res.status(400).json({
                     success: false,
@@ -407,7 +398,7 @@ const httpProveedor = {
                 url: `${process.env.BACKEND_URL || `${req.protocol}://${req.get('host')}`}/api/proveedor/${encodeURIComponent(RazonSocial || preRegistro.RazonSocial)}/documentos/${encodeURIComponent(a.nombre)}`
             }));
 
-            console.log(`NIT: ${NIT}`);
+            console.log(`NIT: ${datos.NIT}`);
             console.log(`Razón Social: ${RazonSocial}`);
             
 
@@ -461,11 +452,15 @@ const httpProveedor = {
         } catch (error) {
             console.error('Error al completar el registro:', error.message);
             let mensaje = 'Error interno al guardar los datos'
-            if (error.message) {
+            if (error.response) {
                 mensaje = `Error de SharePoint: ${error.response.status} - ${JSON.stringify(error.response.data)}`;
             } else if (error.message) {
                 mensaje = error.message;
             }
+            res.status(500).json({
+                success: false,
+                msg: mensaje
+            });
         }
     },
 
