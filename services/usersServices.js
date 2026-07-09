@@ -75,7 +75,7 @@ class UsersService {
                 }
             );
 
-            const drive = res.data.value.find(d => d.name === driveName);
+            const drive = response.data.value.find(d => d.name === driveName);
             if (!drive) {
                 throw new Error(`Biblioteca "${driveName}" no encontrada`);
             }

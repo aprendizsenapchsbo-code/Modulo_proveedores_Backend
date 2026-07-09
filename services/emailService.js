@@ -56,7 +56,7 @@ async function sendEmail(to, subject, htmlBody, from = null) {
             subject,
             html: htmlBody
         };
-        const info = await transporter.sendEmail(mailOptions);
+        const info = await transporter.sendMail(mailOptions);
         console.log(`Correo enviado a ${to} (SMTP)`, info.message)
     }
 }
