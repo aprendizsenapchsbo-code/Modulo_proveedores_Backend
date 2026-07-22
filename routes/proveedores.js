@@ -7,6 +7,7 @@ const routes = Router();
 
 // Rutas Get
 routes.get("/", validarJWT, esAdmin, httpProveedor.getProveedores)
+routes.get('/buscar', httpProveedor.buscarProveedores);
 routes.get("/actualizacion/:token", httpProveedor.getProveedorByUpdateToken)
 routes.get("/:razonSocial", validarJWT, esAdmin, httpProveedor.getProveedorId)
 routes.get("/:razonSocial/documentos/:nombre", /* validarJWT, */ httpProveedor.obtenerDocumentos)
@@ -23,8 +24,9 @@ routes.post("/rechazar/pre-registro/:razonSocial", validarJWT, esAdmin, httpProv
 routes.put("/:razonSocial/solicitar-actualizacion", validarJWT, esAdmin, httpProveedor.solicitarActualizacion)
 routes.put("/:token/actualizar-datos-carga-directa", upload.array('documentos', 10), httpProveedor.actualizarDatosProveedor)
 routes.put("/:RazonSocial", validarJWT, esAdmin, upload.array('documentos', 10), httpProveedor.actualizarProveedor)
+routes.put("/inactivar-proveedor/:razonSocial", validarJWT, esAdmin, httpProveedor.inactivarProveedor)
 
 // Rutas Delete
-routes.delete("/:razonSocial", validarJWT, esAdmin, httpProveedor.eliminarProveedor)
+// routes.delete("/:razonSocial", validarJWT, esAdmin, httpProveedor.eliminarProveedor)
 
 export default routes; 

@@ -68,7 +68,7 @@ const httpProveedor = {
     getProveedores: async (req, res) => {
         try {
             console.log('🔍 [GET /api/proveedor] - Iniciando petición');
-            const limit = parseInt(req.query.limit) || 20;
+            const limit = parseInt(req.query.limit) || 0;
             const skipToken = req.query.skipToken || null;
             
             const resultado = await sharePointService.getAllSuppliers(limit, skipToken);
@@ -89,6 +89,29 @@ const httpProveedor = {
                 success: false,
                 msg: "Error al buscar los proveedores",
                 error: error.message
+            });
+        }
+    },
+
+    buscarProveedores: async (req, res) => {
+        try {
+            const { search, estadoProveedor, tipoProveedor } = req.query;
+            const filtros = {};
+            if (search) filtros.search = search;
+            if (estadoProveedor) filtros.estadoProveedor = estadoProveedor;
+            if (tipoProveedor) filtros.tipoProveedor = tipoProveedor;
+
+            const resultado = await sharePointService.searchSuppliers(filtros);
+            res.status(200).json({
+                success: true,
+                data: resultado,
+                count: resultado.length
+            });
+        } catch (error) {
+            console.error('Error en búsqueda de proveedores:', error);
+            res.status(500).json({
+                success: false,
+                msg: 'Error al buscar proveedores'
             });
         }
     },
@@ -268,7 +291,7 @@ const httpProveedor = {
     // Enviar correo al proveedor
     registroProveedor: async (req, res) => {
         try {
-            const { CorreoElectronico } = req.body;
+            const { CorreoElectronico, ccEmail } = req.body;
 
             if (!CorreoElectronico) {
                 return res.status(400).json({
@@ -278,6 +301,7 @@ const httpProveedor = {
             }
             console.log('Nuevo Pre-registro de proveedor');
             console.log(`Email: ${CorreoElectronico}`);
+            console.log(`CC: ${ccEmail}`)
 
             // Generar el token unico
             const crypto = await import('crypto');
@@ -287,6 +311,7 @@ const httpProveedor = {
             // Prepara datos iniciales para subir al SharePoint
             const supplierData = {
                 CorreoElectronico,
+                ccEmail,
                 fechaRegistroInicial: new Date().toISOString(),
                 estado: 'Invitación_enviada',
                 tokenRegistro: token,
@@ -299,8 +324,8 @@ const httpProveedor = {
             console.log('Registro inicial guardado en SharePoint');
             
             // Enviando correo de pre-registro
-            try {
-                await enviarCorreoRegistro(CorreoElectronico, token);
+            await enviarCorreoRegistro(CorreoElectronico, token, ccEmail || null);
+            /* try {
                 console.log('Correo de pre-registro enviado al proveedor');
             } catch (emailError) {
                 console.error('Error al enviar el correo: ', emailError.message);
@@ -309,7 +334,7 @@ const httpProveedor = {
                     msg: 'Error al enviar el correo de pre-registro',
                     error: emailError.message
                 });
-            }
+            } */
             
             res.status(200).json({
                 success: true,
@@ -982,7 +1007,42 @@ const httpProveedor = {
         }
     },
 
-    eliminarProveedor: async (req, res) => {
+    // Función para inactivar un proveedor en lugar de eliminar
+    inactivarProveedor: async (req, res) => {
+        try {
+            const { razonSocial } = req.params;
+
+            const proveedor = await sharePointService.getSupplierByRazonSocial(razonSocial);
+            if (!proveedor) {
+                return res.status(404).json({
+                    success: false,
+                    msg: "Razón Social no encontrada"
+                });
+            }
+
+            await sharePointService.updateSupplier(razonSocial, {
+                estadoProveedor: "Inactivo",
+                fechaActualización: new Date(),
+            })
+
+            const estadoActualizado = await sharePointService.getSupplierByRazonSocial(razonSocial);
+
+            res.status(200).json({
+                success: true,
+                data: estadoActualizado,
+                msg: 'Estado actualizado a "Inactivo"'
+            })
+
+        } catch (error) {
+            console.error("Error al actualizar el estado a Inactivo", error);
+            res.status(500).json({
+                success: false,
+                msg: "Error al actualizar el estado"
+            });
+        }
+    }
+
+    /* eliminarProveedor: async (req, res) => {
         try {
             const { razonSocial } = req.params;
 
@@ -999,7 +1059,7 @@ const httpProveedor = {
                 msg: "Error al eliminar el proveedor"
             });
         }
-    }
+    } */
 }
 
 export default httpProveedor;

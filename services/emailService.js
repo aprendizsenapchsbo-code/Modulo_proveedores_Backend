@@ -22,19 +22,24 @@ if (EMAIL_PROVIDER === 'smtp') {
 }
 
 // Función interna para enviar correos (se unifica SMTP y Graph)
-async function sendEmail(to, subject, htmlBody, from = null) {
+async function sendEmail(to, subject, htmlBody, from = null, cc = null) {
     const formAddress = from || process.env.EMAIL_USER || process.env.MAIL_FROM;
+    const ccList = cc ? (Array.isArray(cc) ? cc : [cc]): [];
 
     if (EMAIL_PROVIDER === 'graph') {
         // Usar Microsoft Graph API
         const token = await authService.getAccessToken();
         const url = `https://graph.microsoft.com/v1.0/users/${formAddress}/sendMail`;
 
+        const toRecipients = [{ emailAddress: { address: to } }];
+        const ccRecipients = ccList.map(addr => ({ emailAddress: { address: addr }}));
+
         const message = {
             message: {
                 subject,
                 body: { contentType: 'HTML', content: htmlBody },
-                toRecipients: [{ emailAddress: { address: to } }]
+                toRecipients,
+                ccRecipients: ccRecipients.length > 0 ? ccRecipients : undefined,
             },
             saveToSentItems: true
         };
@@ -44,7 +49,7 @@ async function sendEmail(to, subject, htmlBody, from = null) {
                 'Content-Type': 'application/json'
             }
         });
-        console.log(`Correo enviado a ${to} (Graph)`);
+        console.log(`Correo enviado a ${to} (Graph)${ccRecipients.length ? ' con CC: ' + ccList.join(', ') : ''}`);
     } else {
         // Usar SMTP (nodemailer)
         if (!transporter) {
@@ -53,16 +58,17 @@ async function sendEmail(to, subject, htmlBody, from = null) {
         const mailOptions = {
             from: formAddress,
             to,
+            cc: ccList.length > 0 ? ccList : undefined,
             subject,
             html: htmlBody
         };
-        const info = await transporter.sendEmail(mailOptions);
-        console.log(`Correo enviado a ${to} (SMTP)`, info.message)
+        const info = await transporter.sendMail(mailOptions);
+        console.log(`Correo enviado a ${to} (SMTP)${ccList.length ? ' con CC: ' + ccList.join(', ') : ''}`);
     }
 }
 
 /* Funciones para enviar correo especificos */
-export const enviarCorreoRegistro = async (CorreoElectronico, token) => {
+export const enviarCorreoRegistro = async (CorreoElectronico, token, ccEmail = null) => {
     console.log('Token: ', token);
     if (!token) {
         throw new Error('Token es requerido para el pre-registro')
@@ -99,8 +105,8 @@ export const enviarCorreoRegistro = async (CorreoElectronico, token) => {
             </p>
             </div>
         `;
-    await sendEmail(CorreoElectronico, 'Pre-registro de proveedor', html);
-}
+    await sendEmail(CorreoElectronico, 'Pre-registro de proveedor', html, null, ccEmail);
+};
 
 export const enviarCorreoRevisionEmpresa = async (proveedor) => {
     if (!proveedor || !proveedor.RazonSocial) {

@@ -41,15 +41,13 @@ app.use("/api/proveedor", proveedores);
 
 
 // INICIAR SERVIDOR
-if (process.env.NODE_ENV !== 'production') {
-  app.listen(PORT, () => {
-    console.log('Servidor Express iniciando');
-    console.log('='.repeat(50));
-    console.log(`Puerto ${PORT}`);
-    console.log(`Base de datos SharePoint`)
-    console.log(`CORS: ${process.env.FRONTEND_URL_PRODUCCION /* ||  process.env.URL_PRUEBAS */}`);
+app.listen(PORT, () => {
+  console.log('Servidor Express iniciando');
+  console.log('='.repeat(50));
+  console.log(`Puerto ${PORT}`);
+  console.log(`Base de datos SharePoint`)
+  console.log(`CORS: ${process.env.FRONTEND_URL_PRODUCCION /* ||  process.env.URL_PRUEBAS */}`);
     
-  });
-}
+});
 
 export default app;
