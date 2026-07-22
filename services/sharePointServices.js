@@ -377,6 +377,132 @@ class SharePointService {
             throw error;
         }
     }
+
+    // Función para buscar todos los proveedores paralelamente
+    async getAllSuppliersParallel(limit = 100, skipToken = null) {
+        const siteId = await this.getSiteId();
+        const driveId = await this.getDriveId();
+        const token = await authService.getAccessToken();
+
+        const supplierBase = `${this.basePath}/${this.suppliersFolder}`;
+        const encodedPath = this.encodedPath(supplierBase);
+        let url = `${this.graphApiUrl}/sites/${siteId}/drives/${driveId}/root:/${encodedPath}:/children?$top=${limit}`;
+        if (skipToken) url += `&$skiptoken=${skipToken}`;
+
+        const response = await axios.get(url, {
+            headers: {
+                Authorization: `Bearer ${token}`
+            }
+        });
+        const folders = response.data.value.filter(item => item.folder);
+
+        // Lanzar todas las consultas en paralelo
+        const promesas = folders.map(async (folder) => {
+            try {
+                const proveedorFolderPath = `${supplierBase}/${folder.name}`;
+                const encoded = this.encodedPath(proveedorFolderPath);
+                const yearsUrl = `${this.graphApiUrl}/sites/${siteId}/drives/${driveId}/root:/${encoded}:/children`;
+
+                const yearsRes = await axios.get(yearsUrl, {
+                    headers: {
+                        Authorization: `Bearer ${token}`
+                    }
+                });
+                const yearFolders = yearsRes.data.value.filter(f => f.folder);
+                if (yearFolders.length === 0) return null;
+
+                const years = yearFolders.map(f => parseInt(f.name)).filter(y => !isNaN(y));
+                if (years.length === 0) return null;
+                const latestYear = Math.max(...years).toString();
+
+                const jsonPath = `${proveedorFolderPath}/${latestYear}/datos_proveedor.json`;
+                const encodedJson = this.encodedPath(jsonPath);
+                const jsonUrl = `${this.graphApiUrl}/sites/${siteId}/drives/${driveId}/root:/${encodedJson}`;
+
+                const contentRes = await axios.get(`${jsonUrl}:/content`, {
+                    headers: {
+                        Authorization: `Bearer ${token}`
+                    }
+                });
+                return contentRes.data;
+            } catch (err) {
+                // Si falla algún proveedor, lo omitimos silenciosamente
+                console.warn(`Error al leer ${folder.name}:`, err.message);
+                return null;
+            }
+        });
+
+        const proveedores = (await Promise.all(promesas)).filter(p => p !== null);
+
+        const nextLink = response.data['@odata.nextLink'] || null;
+        let nextSkipToken = null;
+        if (nextLink) {
+            try {
+                const urlObj = new URL(nextLink);
+                nextSkipToken = urlObj.searchParams.get('$skiptoken');
+            } catch (e) {
+                const match = nextLink.match(/[?&]$skiptoken=([^&]+)/);
+                if (match) nextSkipToken = match[1];
+            }
+        }
+
+        return {
+            data: proveedores,
+            hasMore: !!nextLink,
+            nextSkipToken
+        };
+    }
+
+    // Función para busqueda de proveedores
+    async searchSuppliers(filtros = {}) {
+        const todos = [];
+        let skipToken = null;
+        const limit = 200;  // número de proveedores por página (más grande para menos peticiones)
+
+        // Recorre todas las páginas hasta que no haya más
+        do {
+            const resultado = await this.getAllSuppliersParallel(limit, skipToken);
+            todos.push(...resultado.data);
+            skipToken = resultado.nextSkipToken;
+        } while (skipToken);
+
+        // Aplicar los filtros sobre el array completo
+        let filtrados = todos;
+
+        if (filtros.estadoProveedor) {
+            const estado = filtros.estadoProveedor.toLowerCase();
+            // Distinguir casos especiales que viven en 'estado'
+            if (estado === 'invitación_enviada') {
+                filtrados = filtrados.filter(p => 
+                    p.estado && p.estado.toLowerCase() === estado
+                );
+            } else {
+                // Para el resto de estados (pre-registro, registrado, etc.) se usa estadoProveedor
+                filtrados = filtrados.filter(p => 
+                    p.estadoProveedor && p.estadoProveedor.toLowerCase() === estado
+                );
+            }
+        }
+
+        // Filtro por tipo de proveedor
+        if (filtros.tipoProveedor) {
+            const tipo = filtros.tipoProveedor.toLowerCase();
+            filtrados = filtrados.filter(p =>
+                p.TipoProveedor && p.TipoProveedor.toLowerCase() === tipo
+            );
+        }
+
+        if (filtros.search) {
+            const term = filtros.search.toLowerCase();
+            filtrados = filtrados.filter(p => 
+                (p.RazonSocial && p.RazonSocial.toLowerCase().includes(term)) ||
+                (p.NIT && p.NIT.toLowerCase().includes(term)) ||
+                (p.CorreoElectronico && p.CorreoElectronico.toLowerCase().includes(term))
+            );
+        }
+
+        return filtrados;
+    }
     
     // Obtener un proveedor por su Razón Social (buscando la carpeta que coincida)
     async getSupplierByRazonSocial(razonSocial) {
@@ -467,7 +593,7 @@ class SharePointService {
     // Verificar que la carpeta del proveedor ya exista
     async getSupplierByToken(token) {
         console.log(`Buscando token: ${token}`)
-        const resultado = await this.getAllSuppliers();
+        const resultado = await this.getAllSuppliersParallel();
 
         // Acceder a resultado.data
         const all = Array.isArray(resultado) ? resultado : (resultado.data || [])
@@ -488,7 +614,7 @@ class SharePointService {
     // Servicio para encontrar el token que va en el link magico al solicitar actualización al proveedor
     async getSupplierByUpdateToken(token) {
         console.log(`buscando token de actualización: ${token}`);
-        const resultado = await this.getAllSuppliers();
+        const resultado = await this.getAllSuppliersParallel();
         
         const todosProveedores = Array.isArray(resultado) ? resultado : (resultado.data || []);
 
@@ -547,7 +673,7 @@ class SharePointService {
         }
     }
 
-    async deleteSupplier(razonSocial) {
+    /* async deleteSupplier(razonSocial) {
         try {
             const baseFolder = `${this.basePath}/${this.suppliersFolder}/Proveedor_${this.sanitize(razonSocial)}`;
             const siteId = await this.getSiteId();
@@ -567,7 +693,7 @@ class SharePointService {
             console.log('Error al eliminar el proveedor:', error.message);
             throw error;
         }
-    }
+    } */
 
     // Eliminar carpeta de un año especifico para un proveedor
     async deleteSupplierYearFolder(razonSocial, anio) {
