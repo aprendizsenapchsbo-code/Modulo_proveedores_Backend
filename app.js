@@ -116,12 +116,14 @@ app.use("/api/usuario", users);
 app.use("/api/proveedor", proveedores);
 
 // INICIAR SERVIDOR
-app.listen(PORT, () => {
-  console.log('Servidor Express iniciando');
-  console.log('='.repeat(50));
-  console.log(`Puerto ${PORT}`);
-  console.log(`Base de datos SharePoint`);
-  console.log(`CORS activo para: ${allowedOrigins.join(', ')}`);
-});
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log('Servidor Express iniciando');
+    console.log('='.repeat(50));
+    console.log(`Puerto ${PORT}`);
+    console.log(`Base de datos SharePoint`);
+    console.log(`CORS activo para: ${allowedOrigins.join(', ')}`);
+  });
+}
 
 export default app;
