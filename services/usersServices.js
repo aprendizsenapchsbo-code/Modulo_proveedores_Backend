@@ -458,6 +458,26 @@ class UsersService {
             throw error;
         }
     }
+    
+    async getUsersByActivationToken(token) {
+        console.log(`Buscando token: ${token}`)
+        const resultado = await this.getAllUsers();
+
+        // Acceder a resultado.data
+        const all = Array.isArray(resultado) ? resultado : (resultado.data || [])
+        console.log('Usuarios encontrados:', all.length);
+
+        const found = all.find(s => {
+            console.log(`Comparando con: ${s.tokenActivacion}`)
+            return s.tokenActivacion === token
+        });
+        if (!found) {
+            console.log('Token no encontrado entre todos los usuarios');
+        } else {
+            console.log('Token encontrado');
+        }
+        return found;
+    }
 
     // Actualizar un usuario
     async updateUser(email, updateData) {

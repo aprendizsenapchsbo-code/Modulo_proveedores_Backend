@@ -6,6 +6,7 @@ const routes = Router();
 
 // Rutas públicas
 routes.post("/login", httpUser.login)
+routes.post("/activar", httpUser.activarCuenta)
 
 // Rutas protegidas
 routes.post("/", validarJWT, esAdmin, httpUser.createUser)

@@ -2,6 +2,9 @@ import sharePointService from '../services/sharePointServices.js';
 import { enviarCorreoRegistro, enviarCorreoActualizacion, enviarCorreoRevisionEmpresa, enviarCorreoAprobacion, enviarCorreoAprobacionActualizacion, enviarCorreoRechazar } from "../services/emailService.js";
 import { buffer } from 'stream/consumers';
 
+let cacheResumen = { data: null, timestamp: 0 };
+const CACHE_TTL = 60 * 1000;  // 60 segundos
+
 // Función auxiliar para limpiar nombres de archivo para SharePoint
 const sanitizeFileName = (fileName) => {
     if (!fileName) return 'documento.pdf';
@@ -112,6 +115,43 @@ const httpProveedor = {
             res.status(500).json({
                 success: false,
                 msg: 'Error al buscar proveedores'
+            });
+        }
+    },
+
+    getResumen: async (req, res) => {
+        try {
+            const ahora = Date.now();
+
+            if (cacheResumen.data && (ahora - cacheResumen.timestamp) < CACHE_TTL) {
+                return res.json({ success: true, ...cacheResumen.data });
+            }
+            // Reutilizamos la función paralela
+            const todos = await sharePointService.searchSuppliers({});
+
+            const preRegistroLista = todos.filter(p => p.estadoProveedor === 'Pre-registro');
+            const pendientes = todos.filter(p => p.estadoProveedor === 'Pendiente Actualización').length;
+
+            const payload = {
+                total: todos.length,
+                preRegistro: {
+                    count: preRegistroLista.length,
+                    lista: preRegistroLista
+                },
+                pendientesActualización: pendientes
+            };
+
+            cacheResumen = { data: payload, timestamp: ahora };
+
+            res.json({
+                success: true,
+                ...payload
+            });
+        } catch (error) {
+            console.error('Error al obtener pre-registros:', error);
+            res.status(500).json({ 
+                success: false, 
+                msg: 'Error al obtener las notificaciones' 
             });
         }
     },
