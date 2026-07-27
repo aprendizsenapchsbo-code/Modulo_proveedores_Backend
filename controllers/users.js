@@ -1,4 +1,6 @@
 import usersServices from "../services/usersServices.js";
+import crypto from 'crypto';
+import { enviarCorreoBienvenidaUsuario } from "../services/emailService.js";
 import jwt from 'jsonwebtoken';
 import bcrypt from "bcrypt";
 
@@ -113,12 +115,24 @@ const httpUser = {
 
     createUser: async (req, res) => {
         try {
-            const {nombre, email, password, rol = 'usuario'} = req.body;
+            // Verificar que el usuario sea admin
+            if (req.usuario.rol !== 'admin') {
+                return res.status(403).json({
+                    success: false,
+                    msg: 'No tienes permisos para esta acción'
+                });
+            }
 
-            if (!nombre || !email || !password) {
+            const {nombre, email, rol = 'usuario'} = req.body;
+
+            // validar roles
+            const rolesPermitidos = ['usuario', 'admin'];
+            const rolFinal = rolesPermitidos.includes(rol) ? rol : 'usuario';
+
+            if (!nombre || !email) {
                 return res.status(400).json({
                     success: false,
-                    msg: "Faltan datos"
+                    msg: "Nombre y correo son obligatorios"
                 });
             }
 
@@ -128,14 +142,6 @@ const httpUser = {
                 return res.status(400).json({
                     success: false,
                     msg: 'El email no es válido'
-                });
-            }
-
-            // Validar longitud de contraseña
-            if (password.length < 6) {
-                return res.status(400).json({
-                    success: false,
-                    msg: 'La contraseña debe tener al menos 6 caracteres'
                 });
             }
 
@@ -156,40 +162,54 @@ const httpUser = {
             await usersServices.listarCarpetas(siteId, rootFolderId); */
             
             // Verificar que el email no exista
-            const existe = await usersServices.getUserByEmail(email);
-            if (existe) {
+            if (await usersServices.getUserByEmail(email)) {
                 return res.status(400).json({
                     success: false,
                     msg: "El email ya esta registrado"
                 });
             }
 
-            // Encriptar contraseña
-            const passwordHash = await bcrypt.hash(password, 10);
+            // Token de activación (32 bytes hex) con expiración de 24h
+            const tokenActivacion = crypto.randomBytes(32).toString('hex');
+            const expiracion = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
             // Preparar datos del usuario
             const usuarioData = {
                 email,
                 nombre,
-                rol,
-                passwordHash,
+                rol: rolFinal,
+                passwordHash: null,
+                activo: false,
+                requiereActivacion: true,
+                tokenActivacion,
+                tokenActivacionExpiracion: expiracion,
+                creadoPor: req.usuario?.email || null,
                 createAt: new Date().toISOString(),
                 updateAt: new Date().toISOString(),
-                activo: true
             };
 
             // Guardar en SharePoint
             await usersServices.createUser(usuarioData);
 
-            console.log('Usuario creado exitosamente');
+            // Notificar al usuario que su cuenta fue creada
+            try {
+                await enviarCorreoBienvenidaUsuario({
+                    email,
+                    nombre,
+                    tokenActivacion
+                });
+            } catch (mailError) {
+                // No rompemos la creación si el correo falla
+                console.error('El usuario se creó, pero falló el correo de bienvenida:', mailError.message);
+            }
 
             // Devolver usuario sin la contraseña
-            const { passwordHash: _, ...usuarioSinPassword } = usuarioData;
+            const { passwordHash: _, tokenActivacion: __, ...seguro } = usuarioData;
 
             res.status(201).json({
                 success: true,
-                data: usuarioSinPassword,
-                msg: "Usuario creado exitosamente"
+                data: seguro,
+                msg: "Invitación enviada"
             });
 
         } catch (error) {
@@ -200,6 +220,62 @@ const httpUser = {
                 error: error.message
             });
         }       
+    },
+
+    /* Activación de usuario */
+    activarCuenta: async (req, res) => {
+        try {
+            const { token, password } = req.body;
+            if (!token || !password) {
+                return res.status(400).json({
+                    success: false,
+                    msg: 'Token y contraseña son obligatorios'
+                });
+            }
+
+            if (password.length < 8) {
+                return res.status(400).json({
+                    success: false,
+                    msg: 'La contraseña debe tener máximo 8 caracteres'
+                });
+            }
+
+            const usuario = await usersServices.getUsersByActivationToken(token);
+            if(!usuario) {
+                return res.status(400).json({
+                    success: false,
+                    msg: 'El enlace es inválido o ya fue usado'
+                });
+            }
+            if (new Date(usuario.tokenActivacionExpiracion) < new Date()) {
+                return res.status(400).json({
+                    success: false,
+                    msg: 'El enlace expiró. Pide uno nuevo al administrador'
+                });
+            }
+
+            const passwordHash = await bcrypt.hash(password, 10);
+            await usersServices.updateUser(usuario.email, {
+                passwordHash,
+                activo: true,
+                requiereActivacion: false,
+                tokenActivacion: null,
+                tokenActivacionExpiracion: null,
+                updatedAt: new Date().toISOString()
+            });
+
+            res.json({
+                success: true,
+                msg: 'Cuenta activada. Ya puedes iniciar sesión'
+            });
+
+        } catch (error) {
+            console.error('Error al activar cuenta:', error.message);
+            res.status(500).json({
+                success: false,
+                msg: 'Error al activar la cuenta'
+            });
+        }
     },
 
     /* GET: Obtener lista de usuarios (solo admin) */

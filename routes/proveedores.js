@@ -6,8 +6,9 @@ import { upload } from "../config/multer.js";
 const routes = Router();
 
 // Rutas Get
-routes.get("/", validarJWT, esAdmin, httpProveedor.getProveedores)
+routes.get("/", validarJWT, httpProveedor.getProveedores)
 routes.get('/buscar', httpProveedor.buscarProveedores);
+routes.get('/resumen', validarJWT, httpProveedor.getResumen);
 routes.get("/actualizacion/:token", httpProveedor.getProveedorByUpdateToken)
 routes.get("/:razonSocial", validarJWT, esAdmin, httpProveedor.getProveedorId)
 routes.get("/:razonSocial/documentos/:nombre", /* validarJWT, */ httpProveedor.obtenerDocumentos)

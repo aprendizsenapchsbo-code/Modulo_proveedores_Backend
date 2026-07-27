@@ -353,9 +353,42 @@ export const enviarCorreoActualizacion = async (CorreoElectronico, tokenActualiz
                 <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
                 <p style="color: #666; font-size: 12px;">
                     Cordialmente,<br>
-                    <strong>PCH San Bartolomé</strong><br>
+                    <strong>PCH San Bartolomé S.A.S E.S.P</strong><br>
                 </p>
                 </div>
             `;
     await sendEmail(CorreoElectronico, 'Solicitud para Actualización de Datos', html);
+};
+
+/* Correo de bienvenida: avisa al usuario que su acceso fue creado y lo lleva al login.
+No envía la contraseña (seguridad): solo confirma el correo de acceso y el link de entrada
+*/
+export const enviarCorreoBienvenidaUsuario = async ({ email, nombre, tokenActivacion }) => {
+    const url = getUrlFrontend(`activar-cuenta?token=${tokenActivacion}`);
+    const nombreCorto = (nombre || '').trim().split(' ')[0];
+    const html = `
+        <div style="font-family:'Segoe UI',system-ui,Arial,sans-serif; max-width:600px; margin:0 auto; color:#142808;">
+            <div style="background:linear-gradient(125deg,#6FC33D,#3454D1); padding:26px 30px; border-radius:14px 14px 0 0;">
+                <div style="color:#eafbe0; font-size:11px; letter-spacing:2px; font-weight:700;">
+                    PCH SAN BARTOLOMÉ S.A.S E.S.P · ACCESO
+                </div>
+                <div style="color:#fff; font-size:26px; font-weight:800; margin-top:6px;">
+                    Tu cuenta está lista, ${nombreCorto}.
+                </div>
+            </div>
+            <div style="background:#fff; border:1px solid #DAEAD0; border-top:none; padding:30px; border-radius:0 0 14px 14px;">
+                <p>Un administrador creó tu acceso al <strong>Módulo de Proveedores</strong>.
+                    Para entrar, define tu contraseña con el botón siguiente (válido 24 horas):
+                </p>
+                <p style="text-align:center; margin:24px 0;">
+                    <a href="${url}" style="background:#3454D1; color:#fff; padding:14px 30px; text-decoration:none; border-radius:10px; font-weight:700; display:inline-block;">
+                        Crear mi contraseña →
+                    </a>
+                </p>
+                <p style="font-size:12px; color:#142808; opacity:.6;">
+                    Si no esperabas esta cuenta, ignora este correo.
+                </p>
+            </div>
+        </div>`;
+    await sendEmail(email, 'Activa tu acceso al Módulo de Proveedores', html);
 };
