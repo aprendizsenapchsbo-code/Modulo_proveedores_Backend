@@ -1,6 +1,7 @@
 import sharePointService from '../services/sharePointServices.js';
 import { enviarCorreoRegistro, enviarCorreoActualizacion, enviarCorreoRevisionEmpresa, enviarCorreoAprobacion, enviarCorreoAprobacionActualizacion, enviarCorreoRechazar } from "../services/emailService.js";
 import { buffer } from 'stream/consumers';
+import { obtenerExpresion, cambiarExpresion } from '../tareas/actualizacionMasiva.js';
 
 let cacheResumen = { data: null, timestamp: 0 };
 const CACHE_TTL = 60 * 1000;  // 60 segundos
@@ -68,6 +69,33 @@ function obtenerTiposDocumentosRequeridos(TipoContribuyente, Pais) {
 }
 
 const httpProveedor = {
+    /* Funciones para la actualización masiva de proveedores con node-cron */
+    obtenerConfiguracionCron: async (req, res) => {
+        try {
+            const expresion = obtenerExpresion();
+            res.json({ success: true, expresion });
+        } catch (error) {
+            res.status(500).json({ success: false, msg: error.message });
+        }
+    },
+
+    actualizarConfiguracionCron: async (req, res) => {
+        try {
+            if (req.usuario.rol !== 'admin') {
+                return res.status(403).json({ success: false, msg: 'No autorizado' });
+            }
+            
+            const { expresion } = req.body;
+            await cambiarExpresion(expresion);
+            res.json({ success: true, msg: 'Expresión actualizada' });
+        } catch (error) {
+            res.status(400).json({
+                success: false, 
+                msg: error.message
+            });
+        }
+    },
+
     getProveedores: async (req, res) => {
         try {
             console.log('🔍 [GET /api/proveedor] - Iniciando petición');

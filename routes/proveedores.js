@@ -30,4 +30,8 @@ routes.put("/inactivar-proveedor/:razonSocial", validarJWT, esAdmin, httpProveed
 // Rutas Delete
 // routes.delete("/:razonSocial", validarJWT, esAdmin, httpProveedor.eliminarProveedor)
 
+// Rutas de node-cron
+routes.get('/admin/cron-config', validarJWT, httpProveedor.obtenerConfiguracionCron)
+routes.put('/admin/cron-config', validarJWT, esAdmin, httpProveedor.actualizarConfiguracionCron)
+
 export default routes; 
