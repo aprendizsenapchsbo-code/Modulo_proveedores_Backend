@@ -368,7 +368,7 @@ export const enviarCorreoBienvenidaUsuario = async ({ email, nombre, tokenActiva
     const nombreCorto = (nombre || '').trim().split(' ')[0];
     const html = `
         <div style="font-family:'Segoe UI',system-ui,Arial,sans-serif; max-width:600px; margin:0 auto; color:#142808;">
-            <div style="background:linear-gradient(125deg,#6FC33D,#3454D1); padding:26px 30px; border-radius:14px 14px 0 0;">
+            <div style="background-color: #3454D1; padding:26px 30px; border-radius:14px 14px 0 0;">
                 <div style="color:#eafbe0; font-size:11px; letter-spacing:2px; font-weight:700;">
                     PCH SAN BARTOLOMÉ S.A.S E.S.P · ACCESO
                 </div>
@@ -391,4 +391,42 @@ export const enviarCorreoBienvenidaUsuario = async ({ email, nombre, tokenActiva
             </div>
         </div>`;
     await sendEmail(email, 'Activa tu acceso al Módulo de Proveedores', html);
+};
+
+export const enviarCorreoResumenActualizacion = async ({ exitos, fallos, total }) => {
+    const adminEmail = process.env.ADMIN_EMAIL || process.env.EMAIL_USER;
+    if (!adminEmail) {
+        console.error('No se ha configurado un correo de administrador (ADMIN_EMAIL)');
+        return;
+    }
+
+    const fecha = new Date().toLocaleDateString('es-CO', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+    });
+
+    const html = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #333;">📊 Actualización masiva de proveedores</h2>
+            <p>El proceso automático de solicitud de actualización anual ha finalizado.</p>
+            <table style="width: 100%; border-collapse: collapse; margin-top: 20px; background-color: #f9f9f9;">
+                <tr>
+                    <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold;">Total proveedores elegibles</td>
+                    <td style="padding: 10px; border: 1px solid #ddd;">${total}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; color: green;">Enviados con éxito</td>
+                    <td style="padding: 10px; border: 1px solid #ddd; color: green;">${exitos}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; color: red;">Fallos</td>
+                    <td style="padding: 10px; border: 1px solid #ddd; color: red;">${fallos}</td>
+                </tr>
+            </table>
+            <p style="margin-top: 20px; color: #666;">Este es un mensaje automático. No es necesario responder.</p>
+        </div>
+    `
+
+    await sendEmail(adminEmail, `Resumen actualización masiva - ${fecha}`, html);
 };

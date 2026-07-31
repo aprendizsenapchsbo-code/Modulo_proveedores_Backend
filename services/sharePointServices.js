@@ -503,6 +503,22 @@ class SharePointService {
 
         return filtrados;
     }
+
+    async getProveedoresParaActualizacionAnual() {
+        // Obtener todos los proveedores
+        const todos = await this.searchSuppliers({});  // sin filtros, trae todos
+        const anioActual = new Date().getFullYear().toString();
+
+        // Filtra solo los que deben recibir la actualización anual
+        return todos.filter(p => {
+            // Solo proveedores con estado válido (Registrado o Actualizado)
+            const estado = (p.estadoProveedor || '').toLowerCase();
+            if (estado !== 'registrado' && estado !== 'actualizado') return false;
+            // Si ya tienen una solicitud pendiente para este año, no se incluyen
+            if (p.anioActualizacionPendiente === anioActual) return false;
+            return true;
+        });
+    }
     
     // Obtener un proveedor por su Razón Social (buscando la carpeta que coincida)
     async getSupplierByRazonSocial(razonSocial) {
@@ -752,6 +768,52 @@ class SharePointService {
             }
         });
         console.log(`Carpeta eliminada: ${folderPath}`);
+    }
+
+    /* ----------------NODE-CRON CONFIGURABLE---------------- */
+    async getCronConfig() {
+        const siteId = await this.getSiteId();
+        const driveId = await this.getDriveId();
+        const token = await authService.getAccessToken();
+        const filePath = `${this.basePath}/Configuracion/cron-config.json`;
+        const encoded = this.encodedPath(filePath);
+        const url = `${this.graphApiUrl}/sites/${siteId}/drives/${driveId}/root:/${encoded}`;
+
+        try {
+            const res = await axios.get(`${url}:/content`, {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            });
+            return res.data;
+        } catch (err) {
+            if (err.response?.status === 404) {
+                // Si no existe, retornamos una por defecto
+                return { expresionCron: '0 8 1 5 *' };
+            }
+            throw err;
+        }
+    }
+
+    async saveCronConfig(config) {
+        const siteId = await this.getSiteId();
+        const driveId = await this.getDriveId();
+        const token = await authService.getAccessToken();
+        const folderPath = `${this.basePath}/Configuracion`;
+        const filePath = `${folderPath}/cron-config.json`;
+
+        // Asegurar carpeta
+        await this.ensureFolder(folderPath);
+
+        const encoded = this.encodedPath(filePath);
+        const url = `${this.graphApiUrl}/sites/${siteId}/drives/${driveId}/root:/${encoded}:/content`;
+
+        await axios.put(url, JSON.stringify(config, null, 2), {
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
     }
 }
 
