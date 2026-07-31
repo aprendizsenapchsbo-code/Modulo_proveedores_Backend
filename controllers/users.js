@@ -76,7 +76,7 @@ const httpUser = {
                     rol: usuario.rol
                 },
                 process.env.JWT_SECRET || 'clavesupersegura',
-                { expiresIn: '7d' }
+                { expiresIn: '1h' }
             );
 
             console.log('Login exitoso');
