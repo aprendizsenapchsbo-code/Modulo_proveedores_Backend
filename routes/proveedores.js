@@ -20,6 +20,7 @@ routes.post("/registro/completar-registro-carga-directa/:token", upload.array('d
 routes.post("/solicitar-urls-carga/:token", httpProveedor.solicitarUrlsCarga)
 routes.post("/aprobar/pre-registro/:razonSocial", validarJWT, esAdmin, httpProveedor.aprobarPreRegistro)
 routes.post("/rechazar/pre-registro/:razonSocial", validarJWT, esAdmin, httpProveedor.rechazarPreRegistro)
+routes.post("/reenviar-correos", validarJWT, esAdmin, httpProveedor.reenviarCorreos)
 
 // Rutas Put
 routes.put("/:razonSocial/solicitar-actualizacion", validarJWT, esAdmin, httpProveedor.solicitarActualizacion)

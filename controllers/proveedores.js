@@ -47,7 +47,7 @@ function obtenerTiposDocumentosRequeridos(TipoContribuyente, Pais) {
         }
     }
     /* PROVEEDOR NACIONAL */
-    if (esColombia){
+    if (esColombia) {
         if (TipoContribuyente === 'Persona Jurídica') {
             return [
                 'COPIA DE RUT COMPLETO',
@@ -84,13 +84,13 @@ const httpProveedor = {
             if (req.usuario.rol !== 'admin') {
                 return res.status(403).json({ success: false, msg: 'No autorizado' });
             }
-            
+
             const { expresion } = req.body;
             await cambiarExpresion(expresion);
             res.json({ success: true, msg: 'Expresión actualizada' });
         } catch (error) {
             res.status(400).json({
-                success: false, 
+                success: false,
                 msg: error.message
             });
         }
@@ -101,7 +101,7 @@ const httpProveedor = {
             console.log('🔍 [GET /api/proveedor] - Iniciando petición');
             const limit = parseInt(req.query.limit) || 0;
             const skipToken = req.query.skipToken || null;
-            
+
             const resultado = await sharePointService.getAllSuppliers(limit, skipToken);
             console.log('📋 Buscando proveedores en SharePoint...');
 
@@ -177,9 +177,9 @@ const httpProveedor = {
             });
         } catch (error) {
             console.error('Error al obtener pre-registros:', error);
-            res.status(500).json({ 
-                success: false, 
-                msg: 'Error al obtener las notificaciones' 
+            res.status(500).json({
+                success: false,
+                msg: 'Error al obtener las notificaciones'
             });
         }
     },
@@ -236,16 +236,16 @@ const httpProveedor = {
                 });
             }
 
-           /*  // Validar que los tipos enviados coincidan con los requeridos (según índice)
-
-            for (let i = 0; i < tiposRequeridos.length; i++) {
-                if (archivos[i].tipo !== tiposRequeridos[i]) {
-                    return res.status(400).json({
-                        success: false,
-                        msg: `El archivo #${i + 1} debe ser de tipo: ${tiposRequeridos[i]}`
-                    });
-                }
-            } */
+            /*  // Validar que los tipos enviados coincidan con los requeridos (según índice)
+ 
+             for (let i = 0; i < tiposRequeridos.length; i++) {
+                 if (archivos[i].tipo !== tiposRequeridos[i]) {
+                     return res.status(400).json({
+                         success: false,
+                         msg: `El archivo #${i + 1} debe ser de tipo: ${tiposRequeridos[i]}`
+                     });
+                 }
+             } */
 
             // Preparar carpeta del proveedor
             const identificador = razonSocial?.trim() || preRegistro.tokenRegistro;
@@ -375,7 +375,7 @@ const httpProveedor = {
             const crypto = await import('crypto');
             const token = crypto.default.randomBytes(32).toString('hex');
             console.log(`Token generado: ${token.substring(0, 10)}...`);
-            
+
             // Prepara datos iniciales para subir al SharePoint
             const supplierData = {
                 CorreoElectronico,
@@ -386,11 +386,11 @@ const httpProveedor = {
                 tokenRegistroExpiracion: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString()
             };
             const anioPreRegistro = new Date().getFullYear().toString();
-            
+
             // Guardar el registro inicial en el SharePoint
             await sharePointService.saveSupplierData(supplierData, null, anioPreRegistro);
             console.log('Registro inicial guardado en SharePoint');
-            
+
             // Enviando correo de pre-registro
             await enviarCorreoRegistro(CorreoElectronico, token, ccEmail || null);
             /* try {
@@ -403,7 +403,7 @@ const httpProveedor = {
                     error: emailError.message
                 });
             } */
-            
+
             res.status(200).json({
                 success: true,
                 data: {
@@ -423,17 +423,162 @@ const httpProveedor = {
         }
     },
 
+    // Reenviar correos a uno o varios proveedores sin duplicar carpetas y conservando el estado original
+    reenviarCorreos: async (req, res) => {
+        try {
+            let listaCorreos = [];
+            if (Array.isArray(req.body.correos)) {
+                listaCorreos = req.body.correos;
+            } else if (req.body.correo) {
+                listaCorreos = [req.body.correo];
+            } else if (typeof req.body.correos === 'string') {
+                listaCorreos = [req.body.correos];
+            }
+
+            if (listaCorreos.length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    msg: "Debe proporcionar al menos un correo electrónico para reenviar"
+                });
+            }
+
+            const todos = await sharePointService.searchSuppliers({});
+            const anioActual = new Date().getFullYear().toString();
+            const detalles = [];
+
+            for (const email of listaCorreos) {
+                const normalized = (email || '').trim().toLowerCase();
+                if (!normalized) continue;
+
+                const proveedor = todos.find(p => p.CorreoElectronico?.toLowerCase() === normalized);
+
+                if (!proveedor) {
+                    detalles.push({
+                        correo: email,
+                        exito: false,
+                        motivo: 'No se encontró ningún registro con este correo'
+                    });
+                    continue;
+                }
+
+                const esInvitacion = (proveedor.estado && proveedor.estado.toLowerCase() === 'invitación_enviada') ||
+                    (proveedor.estadoProveedor && proveedor.estadoProveedor.toLowerCase() === 'invitacion enviada');
+
+                const esActualizacion = proveedor.estadoProveedor &&
+                    (proveedor.estadoProveedor.toLowerCase() === 'pendiente actualización' ||
+                        proveedor.estadoProveedor.toLowerCase() === 'pendiente actualizacion');
+
+                if (!esInvitacion && !esActualizacion) {
+                    detalles.push({
+                        correo: email,
+                        exito: false,
+                        motivo: `El estado actual es '${proveedor.estadoProveedor || proveedor.estado}', no aplica para reenvío`
+                    });
+                    continue;
+                }
+
+                try {
+                    if (esInvitacion) {
+                        // CASO INVITACIÓN: Conservar estado 'Invitación_enviada' (NO cambiar a reenviado)
+                        // Sobrescribe en la misma carpeta existente con el mismo tokenRegistro
+                        const token = proveedor.tokenRegistro;
+                        if (!token) {
+                            detalles.push({
+                                correo: email,
+                                exito: false,
+                                motivo: 'La invitación no contiene un token válido'
+                            });
+                            continue;
+                        }
+
+                        const updateData = {
+                            ...proveedor,
+                            tokenRegistroExpiracion: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString(),
+                            fechaUltimoReenvio: new Date().toISOString()
+                        };
+
+                        const anio = proveedor.anioRegistro || anioActual;
+                        await sharePointService.saveSupplierData(updateData, null, anio);
+                        await enviarCorreoRegistro(proveedor.CorreoElectronico, token, proveedor.ccEmail || null);
+
+                        detalles.push({
+                            correo: email,
+                            exito: true,
+                            tipo: 'Invitación Pre-registro',
+                            estado: proveedor.estado
+                        });
+
+                    } else if (esActualizacion) {
+                        // CASO ACTUALIZACIÓN: Conservar estado 'Pendiente Actualización' (NO cambiar a reenviado)
+                        // Sobrescribe en la misma carpeta de la Razón Social existente
+                        let tokenActualizacion = proveedor.tokenActualizacion;
+                        if (!tokenActualizacion) {
+                            const crypto = await import('crypto');
+                            tokenActualizacion = crypto.default.randomBytes(32).toString('hex');
+                        }
+
+                        const updateData = {
+                            tokenActualizacion,
+                            tokenActualizacionExpiracion: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString(),
+                            fechaUltimoReenvio: new Date().toISOString(),
+                            anioActualizacionPendiente: proveedor.anioActualizacionPendiente || anioActual
+                        };
+
+                        await sharePointService.updateSupplier(proveedor.RazonSocial, updateData);
+                        await enviarCorreoActualizacion(proveedor.CorreoElectronico, tokenActualizacion);
+
+                        detalles.push({
+                            correo: email,
+                            exito: true,
+                            tipo: 'Actualización de Datos',
+                            estado: proveedor.estadoProveedor
+                        });
+                    }
+                } catch (errIndividual) {
+                    console.error(`Error reenviando a ${email}:`, errIndividual);
+                    detalles.push({
+                        correo: email,
+                        exito: false,
+                        motivo: errIndividual.message || 'Error al procesar el reenvío'
+                    });
+                }
+            }
+
+            const exitosos = detalles.filter(d => d.exito).length;
+            const fallidos = detalles.filter(d => !d.exito).length;
+
+            res.status(200).json({
+                success: exitosos > 0,
+                resumen: {
+                    total: listaCorreos.length,
+                    exitosos,
+                    fallidos
+                },
+                detalles,
+                msg: `${exitosos} de ${listaCorreos.length} correo(s) reenviado(s) exitosamente`
+            });
+
+        } catch (error) {
+            console.error('Error general en reenviarCorreos:', error);
+            res.status(500).json({
+                success: false,
+                msg: 'Error al procesar el reenvío de correos',
+                error: error.message
+            });
+        }
+    },
+
     // Completar registro del proveedor
     completarRegistro: async (req, res) => {
         try {
             const { token } = req.params;
-            const { 
+            const {
                 archivosSubidos,
                 ...datos
-             } = req.body;
+            } = req.body;
 
-             console.log('Completanto registro:');
-             console.log('datos recibidos:', datos);
+            console.log('Completanto registro:');
+            console.log('datos recibidos:', datos);
             console.log(`Token: ${token.substring(0, 10)}...`);
 
             const preRegistro = await sharePointService.getSupplierByToken(token);
@@ -472,7 +617,7 @@ const httpProveedor = {
                     msg: `Faltan documentos: ${faltantes.join(', ')}`
                 });
             }
-            
+
             /* // Validar que los documentos sean PDF
             for (const file of req.files) {
                 if (file.mimetype !== 'application/pdf') {
@@ -494,7 +639,7 @@ const httpProveedor = {
 
             console.log(`NIT: ${datos.NIT}`);
             console.log(`Razón Social: ${RazonSocial}`);
-            
+
 
             // Construir el objeto del proveedor
             // y mantener el estado como Pre-registro hasta que la empresa lo verifique
@@ -517,7 +662,7 @@ const httpProveedor = {
 
             await sharePointService.saveSupplierData(proveedorCompleto, filesWithBuffers, anioPreRegistro);
             console.log('Datos guardados en SharePoint'); */
-            
+
             // Guardar en SharePoint (sin archivos, solo el JSON)
             await sharePointService.saveSupplierData(proveedorCompleto, null, new Date().getFullYear().toString());
 
@@ -531,7 +676,7 @@ const httpProveedor = {
             } catch (emailError) {
                 console.error('Error al notificar a la empresa:', emailError);
             }
-            
+
             // Respuesta exitosa
             res.status(200).json({
                 success: true,
@@ -542,7 +687,7 @@ const httpProveedor = {
                 },
                 msg: "Registro completado exitosamente"
             });
-            
+
         } catch (error) {
             console.error('Error al completar el registro:', error.message);
             let mensaje = 'Error interno al guardar los datos'
@@ -573,24 +718,24 @@ const httpProveedor = {
                 }
             } */
 
-           // Manejo flexible de datos (JSON o FormData)
-           if (req.headers['content-type']?.includes('multipart/form-data')) {
-            if (req.body.datosProveedor) {
-                try {
-                    datosActualizar = JSON.parse(req.body.datosProveedor);
-                } catch (e) {
-                    console.warn('Error parseando datosProveedor en FormData', e);
+            // Manejo flexible de datos (JSON o FormData)
+            if (req.headers['content-type']?.includes('multipart/form-data')) {
+                if (req.body.datosProveedor) {
+                    try {
+                        datosActualizar = JSON.parse(req.body.datosProveedor);
+                    } catch (e) {
+                        console.warn('Error parseando datosProveedor en FormData', e);
+                        datosActualizar = req.body;
+                    }
+                } else {
                     datosActualizar = req.body;
                 }
             } else {
                 datosActualizar = req.body;
             }
-           } else {
-            datosActualizar = req.body;
-           }
 
             // Validar que el admin esté autenticado
-            if(req.usuario.rol !== 'admin'){
+            if (req.usuario.rol !== 'admin') {
                 return res.status(403).json({
                     success: false,
                     msg: 'No tienes permisos para esta acción'
@@ -603,7 +748,7 @@ const httpProveedor = {
 
             // Validar que el proveedor exista
             const proveedorExistente = await sharePointService.getSupplierByRazonSocial(RazonSocial);
-            if(!proveedorExistente) {
+            if (!proveedorExistente) {
                 return res.status(404).json({
                     success: false,
                     msg: "Proveedor no encontrado"
@@ -914,7 +1059,7 @@ const httpProveedor = {
             const crypto = await import('crypto');
             const tokenActualizacion = crypto.default.randomBytes(32).toString('hex');
 
-            
+
             // Actualizar el estado del proveedor a "Pendiente Actualización" y guardar el token único con expiración
             await sharePointService.updateSupplier(razonSocial, {
                 tokenActualizacion: tokenActualizacion,
@@ -922,10 +1067,10 @@ const httpProveedor = {
                 tokenActualizacionExpiracion: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString(), // 15 días
                 anioActualizacionPendiente: anioObjetivo
             });
-            
+
             // Obtener el proveedor actualizado
             const proveedorActualizado = await sharePointService.getSupplierByRazonSocial(razonSocial);
-            
+
             // Enviar correo de actualización con el enlace que incluya el token y el año
             await enviarCorreoActualizacion(proveedorActualizado.CorreoElectronico, tokenActualizacion);
 
@@ -950,7 +1095,7 @@ const httpProveedor = {
             const { comentario } = req.body;
 
             // Validar que el admin esté autenticado
-            if(req.usuario.rol !== 'admin'){
+            if (req.usuario.rol !== 'admin') {
                 return res.status(403).json({
                     success: false,
                     msg: 'No tienes permisos para esta acción'
@@ -983,7 +1128,7 @@ const httpProveedor = {
                 estadoProveedor: nuevoEstado,
                 comentarioAprobacion: comentario || null,
                 fechaAprobacion: new Date(),
-                aprobadoPor: req.usuario.nombre 
+                aprobadoPor: req.usuario.nombre
             });
 
             // Obtener el proveedor actualizado despúes del cambio
@@ -995,7 +1140,7 @@ const httpProveedor = {
             } else {
                 await enviarCorreoAprobacionActualizacion(proveedorActualizado);
             }
-            
+
 
             res.status(200).json({
                 success: true,
@@ -1018,7 +1163,7 @@ const httpProveedor = {
             const { comentario } = req.body;
 
             // Validar que el admin esté autenticado
-            if(req.usuario.rol !== 'admin'){
+            if (req.usuario.rol !== 'admin') {
                 return res.status(403).json({
                     success: false,
                     msg: 'No tienes permisos para esta acción'
